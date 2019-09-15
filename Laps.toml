@@ -1,4 +1,5 @@
 [scripts.setup-pgdata]
+help = "Setup postgres"
 script = '''
 #!/bin/bash
 set -efu

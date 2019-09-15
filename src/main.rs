@@ -8,12 +8,14 @@ use toml;
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct Script {
+    help: Option<String>,
     script: String,
 }
 
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct Service {
+    help: Option<String>,
     command: Vec<String>,
     exec_before: Option<Vec<String>>,
 }
@@ -33,7 +35,20 @@ enum LapsError {
 
 fn main() -> Result<(), failure::Error> {
     let config = read_config()?;
-    let app: clap::App = clap::App::new("laps - project automation.");
+    print!("{:?}", config);
+
+    let mut subcommands: Vec<clap::App> = Vec::new();
+    for (name, script) in &config.scripts {
+        let subcommand = clap::SubCommand::with_name(name);
+        let subcommand = match &script.help {
+            Some(s) => subcommand.about(s.as_str()),
+            None => subcommand,
+        };
+        subcommands.push(subcommand)
+    }
+
+    let app: clap::App = clap::App::new("laps - project automation.").subcommands(subcommands);
+
     let matches = app.get_matches();
 
     Ok(())
