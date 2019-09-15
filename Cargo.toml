@@ -1,0 +1,11 @@
+[package]
+name = "laps"
+version = "0.1.0"
+authors = ["Laurens Duijvesteijn <git@duijf.io>"]
+edition = "2018"
+
+[dependencies]
+clap = "2.33"
+failure = "0.1"
+toml = "0.5"
+serde = { version = "1.0", features = ["derive"] }
