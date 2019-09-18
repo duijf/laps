@@ -43,6 +43,8 @@ enum LapsError {
     MissingSubcommand,
     #[fail(display = "Script failed")]
     ScriptFailed,
+    #[fail(display = "Service has unknown dependencies")]
+    UnknownDeps(String, HashSet<String>),
 }
 
 fn main() -> Result<(), failure::Error> {
@@ -120,6 +122,7 @@ fn read_config() -> Result<LapsConfig, failure::Error> {
     file.read_to_string(&mut content)?;
     let config: LapsConfig = toml::from_str(&content)?;
     let config = check_duplicate_names(config)?;
+    let config = ensure_deps_exist(config)?;
 
     Ok(config)
 }
@@ -131,5 +134,22 @@ fn check_duplicate_names(config: LapsConfig) -> Result<LapsConfig, failure::Erro
         script_names.intersection(&service_names).cloned().collect();
 
     failure::ensure!(intersection.len() == 0, LapsError::Duplicates(intersection));
+    Ok(config)
+}
+
+fn ensure_deps_exist(config: LapsConfig) -> Result<LapsConfig, failure::Error> {
+    let script_names: HashSet<String> = config.scripts.keys().cloned().collect();
+
+    for (name, service) in &config.services {
+        let dependencies: HashSet<String> = service.exec_before.iter().cloned().collect();
+        let unknown_deps: HashSet<String> =
+            dependencies.difference(&script_names).cloned().collect();
+
+        failure::ensure!(
+            unknown_deps.len() == 0,
+            LapsError::UnknownDeps(name.to_string(), unknown_deps)
+        );
+    }
+
     Ok(config)
 }
