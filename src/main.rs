@@ -1,7 +1,7 @@
 use clap;
 use failure;
 use serde;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Read;
 use toml;
 
@@ -29,13 +29,13 @@ struct LapsConfig {
 
 #[derive(Debug, failure::Fail)]
 enum LapsError {
-    #[fail(display = "Unused placeholder")]
-    Unused,
+    #[fail(display = "Duplicate names in scripts and services")]
+    Duplicates(HashSet<String>),
 }
 
 fn main() -> Result<(), failure::Error> {
     let config = read_config()?;
-    print!("{:?}", config);
+    println!("{:?}", config);
 
     let mut subcommands: Vec<clap::App> = Vec::new();
     for (name, script) in &config.scripts {
@@ -59,5 +59,17 @@ fn read_config() -> Result<LapsConfig, failure::Error> {
     let mut content = String::new();
     file.read_to_string(&mut content)?;
     let config: LapsConfig = toml::from_str(&content)?;
+    let config = check_duplicate_names(config)?;
+
+    Ok(config)
+}
+
+fn check_duplicate_names(config: LapsConfig) -> Result<LapsConfig, failure::Error> {
+    let script_names: HashSet<String> = config.scripts.keys().cloned().collect();
+    let service_names: HashSet<String> = config.services.keys().cloned().collect();
+    let intersection: HashSet<String> =
+        script_names.intersection(&service_names).cloned().collect();
+
+    failure::ensure!(intersection.len() == 0, LapsError::Duplicates(intersection));
     Ok(config)
 }
