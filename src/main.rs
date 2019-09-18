@@ -23,7 +23,8 @@ struct Script {
 struct Service {
     help: Option<String>,
     command: Vec<String>,
-    exec_before: Option<Vec<String>>,
+    #[serde(default=[])]
+    exec_before: Vec<String>,
 }
 
 #[derive(Debug, serde::Deserialize)]
