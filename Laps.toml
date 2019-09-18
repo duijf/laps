@@ -16,8 +16,8 @@ script = '''
 fd -t f -e rs | entr cargo build
 '''
 
-[scripts.setup-pgdata]
-help = "Setup postgres"
+[scripts.db-create]
+help = "Create development DB"
 script = '''
 #!/bin/bash
 set -efu
@@ -31,6 +31,13 @@ EOF
 fi
 '''
 
+[scripts.db-remove]
+help = "Remove development DB"
+script = '''
+#!/bin/bash
+rm -rf ignore/db
+'''
+
 [services.db]
 command = ["/usr/bin/postgres", "-D", "db"]
-exec-before = ["setup-pgdata"]
+exec-before = ["db-create"]
