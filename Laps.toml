@@ -2,6 +2,8 @@
 help = "Setup postgres"
 script = '''
 #!/bin/bash
+touch /tmp/foo
+exit 0
 set -efu
 if [[ ! -d "$PGDATA" ]]; then
     initdb
