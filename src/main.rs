@@ -1,6 +1,4 @@
 use clap;
-use clap::{app_from_crate, crate_authors, crate_description, crate_name, crate_version};
-
 use failure;
 use serde;
 use std::collections::{HashMap, HashSet};
@@ -51,31 +49,40 @@ fn main() -> Result<(), failure::Error> {
     let config = read_config()?;
     println!("{:?}", config);
 
-    let sub_template = r#"{bin}
-
-{about}
-
-USAGE:
-    {usage}"#;
+    let sub_template = "{bin}\n\n  {about}\n\nUSAGE\n  {usage}";
+    let mut subcommand_help: String = "".to_string();
 
     let mut subcommands: Vec<clap::App> = Vec::new();
     for (name, script) in &config.scripts {
         let subcommand = clap::SubCommand::with_name(name).template(sub_template);
         let subcommand = match &script.help {
-            Some(s) => subcommand.about(s.as_str()),
+            Some(s) => {
+                subcommand_help.push_str("  ");
+                subcommand_help.push_str(name);
+                subcommand_help.push_str(&" ".repeat(12 - name.len()));
+                subcommand_help.push_str(s);
+                subcommand_help.push('\n');
+                subcommand.about(s.as_str())
+            }
             None => subcommand,
         };
         subcommands.push(subcommand)
     }
 
-    let template = r#"{bin} - {about}
+    let help_text: String = format!(
+        "laps - Project automation.
 
-PROJECT COMMANDS
+COMMANDS
+{subcommand_help}
+SERVICES
+{services_help}",
+        subcommand_help = subcommand_help,
+        services_help = ""
+    );
 
-{subcommands}"#;
-
-    let app: clap::App = app_from_crate!()
-        .template(template)
+    let app: clap::App = clap::App::new("laps")
+        .version(clap::crate_version!())
+        .help(&*help_text)
         .setting(clap::AppSettings::DisableHelpSubcommand)
         .setting(clap::AppSettings::VersionlessSubcommands)
         .setting(clap::AppSettings::SubcommandRequiredElseHelp)
