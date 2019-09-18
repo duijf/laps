@@ -2,7 +2,11 @@ use clap;
 use failure;
 use serde;
 use std::collections::{HashMap, HashSet};
+use std::fs::{File, Permissions};
 use std::io::Read;
+use std::io::Write;
+use std::os::unix::fs::PermissionsExt;
+use std::process::Command;
 use toml;
 
 #[derive(Debug, serde::Deserialize)]
@@ -64,6 +68,22 @@ fn main() -> Result<(), failure::Error> {
 }
 
 fn run_script(script: &Script) -> Result<(), failure::Error> {
+    let file_path: std::path::PathBuf = [std::env::temp_dir(), "laps-script".into()]
+        .iter()
+        .collect();
+
+    println!("Writing script contents to {:?}", file_path);
+    let mut file = File::create(file_path.clone())?;
+    file.write_all(script.script.as_bytes())?;
+    drop(file);
+
+    println!("Setting script permissions");
+    let perms = Permissions::from_mode(0o755);
+    std::fs::set_permissions(file_path.clone(), perms)?;
+
+    println!("Executing script");
+    Command::new(file_path).output()?;
+
     Ok(())
 }
 
