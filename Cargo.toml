@@ -1,5 +1,6 @@
 [package]
 name = "laps"
+description = "Project automation tool"
 version = "0.1.0"
 authors = ["Laurens Duijvesteijn <git@duijf.io>"]
 edition = "2018"

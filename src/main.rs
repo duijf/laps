@@ -1,4 +1,6 @@
 use clap;
+use clap::{app_from_crate, crate_authors, crate_description, crate_name, crate_version};
+
 use failure;
 use serde;
 use std::collections::{HashMap, HashSet};
@@ -45,9 +47,16 @@ fn main() -> Result<(), failure::Error> {
     let config = read_config()?;
     println!("{:?}", config);
 
+    let sub_template = r#"{bin}
+
+{about}
+
+USAGE:
+    {usage}"#;
+
     let mut subcommands: Vec<clap::App> = Vec::new();
     for (name, script) in &config.scripts {
-        let subcommand = clap::SubCommand::with_name(name);
+        let subcommand = clap::SubCommand::with_name(name).template(sub_template);
         let subcommand = match &script.help {
             Some(s) => subcommand.about(s.as_str()),
             None => subcommand,
@@ -55,7 +64,18 @@ fn main() -> Result<(), failure::Error> {
         subcommands.push(subcommand)
     }
 
-    let app: clap::App = clap::App::new("laps - project automation.").subcommands(subcommands);
+    let template = r#"{bin} - {about}
+
+PROJECT COMMANDS
+
+{subcommands}"#;
+
+    let app: clap::App = app_from_crate!()
+        .template(template)
+        .setting(clap::AppSettings::DisableHelpSubcommand)
+        .setting(clap::AppSettings::VersionlessSubcommands)
+        .setting(clap::AppSettings::SubcommandRequiredElseHelp)
+        .subcommands(subcommands);
 
     let matches = app.get_matches();
 
