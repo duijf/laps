@@ -29,6 +29,7 @@ struct Service {
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct LapsConfig {
+    env: HashMap<String, String>,
     scripts: HashMap<String, Script>,
     services: HashMap<String, Service>,
 }
@@ -84,12 +85,12 @@ PROJECT COMMANDS
         None => failure::bail!(LapsError::MissingSubcommand),
     };
 
-    run_script(script)?;
+    run_script(script, config.env)?;
 
     Ok(())
 }
 
-fn run_script(script: &Script) -> Result<(), failure::Error> {
+fn run_script(script: &Script, env: HashMap<String, String>) -> Result<(), failure::Error> {
     let file_path: std::path::PathBuf = [std::env::temp_dir(), "laps-script".into()]
         .iter()
         .collect();
@@ -104,7 +105,7 @@ fn run_script(script: &Script) -> Result<(), failure::Error> {
     std::fs::set_permissions(file_path.clone(), perms)?;
 
     println!("Executing script");
-    let mut child = Command::new(file_path).spawn()?;
+    let mut child = Command::new(file_path).envs(env).spawn()?;
     let exitcode = child.wait()?;
 
     failure::ensure!(exitcode.success(), LapsError::ScriptFailed);
