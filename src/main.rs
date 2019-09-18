@@ -31,6 +31,8 @@ struct LapsConfig {
 enum LapsError {
     #[fail(display = "Duplicate names in scripts and services")]
     Duplicates(HashSet<String>),
+    #[fail(display = "Please give a subcommand.")]
+    MissingSubcommand,
 }
 
 fn main() -> Result<(), failure::Error> {
@@ -51,6 +53,17 @@ fn main() -> Result<(), failure::Error> {
 
     let matches = app.get_matches();
 
+    let script: &Script = match matches.subcommand_name() {
+        Some(s) => config.scripts.get(s).unwrap(), // Safe; otherwise bug in clap.
+        None => failure::bail!(LapsError::MissingSubcommand),
+    };
+
+    run_script(script)?;
+
+    Ok(())
+}
+
+fn run_script(script: &Script) -> Result<(), failure::Error> {
     Ok(())
 }
 
