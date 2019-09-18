@@ -1,3 +1,7 @@
+[env]
+PGDATA = "/home/duijf/repos/laps/ignore/db"
+PGHOST = "/home/duijf/repos/laps/ignore/db/sock"
+
 [scripts.check]
 help = "Run `cargo check` on file change"
 script = '''
