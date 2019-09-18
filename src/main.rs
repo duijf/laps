@@ -37,6 +37,8 @@ enum LapsError {
     Duplicates(HashSet<String>),
     #[fail(display = "Please give a subcommand.")]
     MissingSubcommand,
+    #[fail(display = "Script failed")]
+    ScriptFailed,
 }
 
 fn main() -> Result<(), failure::Error> {
@@ -82,7 +84,10 @@ fn run_script(script: &Script) -> Result<(), failure::Error> {
     std::fs::set_permissions(file_path.clone(), perms)?;
 
     println!("Executing script");
-    Command::new(file_path).output()?;
+    let mut child = Command::new(file_path).spawn()?;
+    let exitcode = child.wait()?;
+
+    failure::ensure!(exitcode.success(), LapsError::ScriptFailed);
 
     Ok(())
 }
