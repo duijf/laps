@@ -12,14 +12,14 @@ use toml;
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct Script {
-    help: Option<String>,
+    help: String,
     script: String,
 }
 
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "kebab-case")]
 struct Service {
-    help: Option<String>,
+    help: String,
     command: Vec<String>,
     #[serde(default=[])]
     exec_before: Vec<String>,
@@ -54,19 +54,30 @@ fn main() -> Result<(), failure::Error> {
 
     let mut subcommands: Vec<clap::App> = Vec::new();
     for (name, script) in &config.scripts {
-        let subcommand = clap::SubCommand::with_name(name).template(sub_template);
-        let subcommand = match &script.help {
-            Some(s) => {
-                subcommand_help.push_str("  ");
-                subcommand_help.push_str(name);
-                subcommand_help.push_str(&" ".repeat(12 - name.len()));
-                subcommand_help.push_str(s);
-                subcommand_help.push('\n');
-                subcommand.about(s.as_str())
-            }
-            None => subcommand,
-        };
-        subcommands.push(subcommand)
+        let subcommand = clap::SubCommand::with_name(name)
+            .template(sub_template)
+            .about(script.help.as_str());
+        subcommands.push(subcommand);
+
+        subcommand_help.push_str("  ");
+        subcommand_help.push_str(name);
+        subcommand_help.push_str(&" ".repeat(12 - name.len()));
+        subcommand_help.push_str(script.help.as_str());
+        subcommand_help.push('\n');
+    }
+
+    let mut services_help: String = "".to_string();
+    for (name, service) in &config.services {
+        let subcommand = clap::SubCommand::with_name(name)
+            .template(sub_template)
+            .about(service.help.as_str());
+        subcommands.push(subcommand);
+
+        services_help.push_str("  ");
+        services_help.push_str(name);
+        services_help.push_str(&" ".repeat(12 - name.len()));
+        services_help.push_str(service.help.as_str());
+        services_help.push('\n');
     }
 
     let help_text: String = format!(
@@ -77,7 +88,7 @@ COMMANDS
 SERVICES
 {services_help}",
         subcommand_help = subcommand_help,
-        services_help = ""
+        services_help = services_help,
     );
 
     let app: clap::App = clap::App::new("laps")
