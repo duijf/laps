@@ -39,5 +39,6 @@ rm -rf ignore/db
 '''
 
 [services.db]
+help = "Run postgres"
 command = ["/usr/bin/postgres", "-D", "db"]
 exec-before = ["db-create"]
