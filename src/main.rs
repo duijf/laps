@@ -87,7 +87,7 @@ struct Config {
 #[derive(Debug, failure::Fail)]
 enum LapsError {
     #[fail(display = "Watches, services, commands can only have one of `exec`, `exec-script`")]
-    BadExec,
+    BadExec(UnitName),
     #[fail(display = "Exec stanza cannot be empty")]
     ExecCantBeEmpty,
     #[fail(display = "Duplicate names somewhere")]
@@ -204,13 +204,14 @@ fn read_toml_config() -> Result<TomlConfig, failure::Error> {
 }
 
 fn get_exec_spec(
+    name: &UnitName,
     exec: Option<Vec<String>>,
     exec_script: Option<String>,
 ) -> Result<ExecSpec, failure::Error> {
     failure::ensure!(
         // Check exec and exec_script are set mututually exclusively.
         exec.is_none() != exec_script.is_none(),
-        LapsError::BadExec
+        LapsError::BadExec(name.to_owned())
     );
 
     if exec.is_some() {
@@ -226,7 +227,7 @@ fn get_exec_spec(
         return Ok(ExecSpec::ExecScript(exec_script.unwrap()));
     }
 
-    failure::bail!(LapsError::BadExec)
+    failure::bail!(LapsError::BadExec(name.to_owned()))
 }
 
 fn validate_config(toml_config: TomlConfig) -> Result<Config, failure::Error> {
@@ -234,7 +235,7 @@ fn validate_config(toml_config: TomlConfig) -> Result<Config, failure::Error> {
 
     for (name, command) in toml_config.commands {
         let name: UnitName = UnitName(name);
-        let exec_spec: ExecSpec = get_exec_spec(command.exec, command.exec_script)?;
+        let exec_spec: ExecSpec = get_exec_spec(&name, command.exec, command.exec_script)?;
         let prev = units.insert(
             name.clone(),
             Unit {
@@ -250,7 +251,7 @@ fn validate_config(toml_config: TomlConfig) -> Result<Config, failure::Error> {
 
     for (name, service) in toml_config.services {
         let name: UnitName = UnitName(name);
-        let exec_spec: ExecSpec = get_exec_spec(service.exec, service.exec_script)?;
+        let exec_spec: ExecSpec = get_exec_spec(&name, service.exec, service.exec_script)?;
         let prev = units.insert(
             name.clone(),
             Unit {
