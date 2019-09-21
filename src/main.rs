@@ -83,16 +83,12 @@ enum LapsError {
     BadExec,
     #[fail(display = "Exec stanza cannot be empty")]
     ExecCantBeEmpty,
-    #[fail(display = "Duplicate names in scripts and services")]
-    Duplicates(HashSet<String>),
     #[fail(display = "Duplicate names somewhere")]
     Duplicate,
     #[fail(display = "Please give a subcommand.")]
     MissingSubcommand,
     #[fail(display = "Script failed")]
     UnitFailed,
-    #[fail(display = "Service failed")]
-    ServiceFailed,
     #[fail(display = "Service has unknown dependencies")]
     UnknownDeps(String, HashSet<String>),
 }
@@ -339,16 +335,6 @@ fd -t f {extension_str} | entr {exec}
         units: units,
     })
 }
-
-// fn check_duplicate_names(config: LapsConfig) -> Result<LapsConfig, failure::Error> {
-//     let script_names: HashSet<String> = config.scripts.keys().cloned().collect();
-//     let service_names: HashSet<String> = config.services.keys().cloned().collect();
-//     let intersection: HashSet<String> =
-//         script_names.intersection(&service_names).cloned().collect();
-
-//     failure::ensure!(intersection.len() == 0, LapsError::Duplicates(intersection));
-//     Ok(config)
-// }
 
 // fn ensure_deps_exist(config: LapsConfig) -> Result<LapsConfig, failure::Error> {
 //     let script_names: HashSet<String> = config.scripts.keys().cloned().collect();
