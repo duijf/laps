@@ -167,18 +167,18 @@ fn run_exec_script(
         .iter()
         .collect();
 
+    let perms = Permissions::from_mode(0o700);
     let mut file = File::create(&file_path)?;
+    file.set_permissions(perms)?;
     file.write_all(script_contents.as_bytes())?;
     drop(file);
 
-    let perms = Permissions::from_mode(0o755);
-    std::fs::set_permissions(&file_path, perms)?;
-
-    let mut child = Command::new(file_path).envs(env).spawn()?;
+    let mut child = Command::new(&file_path).envs(env).spawn()?;
     let exitcode = child.wait()?;
 
     failure::ensure!(exitcode.success(), LapsError::UnitFailed);
 
+    std::fs::remove_file(&file_path)?;
     Ok(())
 }
 
