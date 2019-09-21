@@ -8,8 +8,6 @@ Signal handling. Wait for child termination before exiting.
 
 Clean up temp files on termination.
 
-Interpolate environment variables in command strings.
-
 A display thing for error messages. Include more meta-data for the current
 error enum. Don't return boxed errors.
 
@@ -42,3 +40,6 @@ Some caching stuff?
 
 Make scripts use a random filename when executing. (Avoids race conditions and
 clashes.)
+
+Interpolate environment variables in command strings. (Escape the dolar sign
+with `$$`).
