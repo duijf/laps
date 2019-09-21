@@ -1,6 +1,6 @@
 # laps
 
-Laps is a project automation tool.
+Laps is a project automation tool. Status: pre-alpha.
 
 ## Ideas
 
