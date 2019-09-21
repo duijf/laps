@@ -4,6 +4,8 @@ Laps is a project automation tool. Status: pre-alpha.
 
 ## Ideas
 
+Plan the execution of services and dependencies.
+
 Signal handling. Wait for child termination before exiting.
 
 Clean up temp files on termination.
