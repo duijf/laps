@@ -9,7 +9,7 @@ use std::process::Command;
 use toml;
 
 #[derive(Debug, serde::Deserialize, Clone)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 struct TomlCommand {
     description: String,
     exec: Option<Vec<String>>,
@@ -17,7 +17,7 @@ struct TomlCommand {
 }
 
 #[derive(Debug, serde::Deserialize, Clone)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 struct TomlService {
     description: String,
     exec: Option<Vec<String>>,
@@ -27,7 +27,7 @@ struct TomlService {
 }
 
 #[derive(Debug, serde::Deserialize, Clone)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 struct TomlWatch {
     description: String,
     exec: Vec<String>,
@@ -36,7 +36,7 @@ struct TomlWatch {
 }
 
 #[derive(Debug, serde::Deserialize, Clone)]
-#[serde(rename_all = "kebab-case")]
+#[serde(rename_all = "kebab-case", deny_unknown_fields)]
 struct TomlConfig {
     environment: HashMap<String, String>,
     commands: HashMap<String, TomlCommand>,
