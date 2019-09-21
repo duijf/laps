@@ -23,6 +23,7 @@ script = '''
 set -efu
 if [[ ! -d "$PGDATA" ]]; then
     initdb
+    mkdir $PGDATA/sock/
     cat >> "$PGDATA/postgresql.conf" <<-EOF
         listen_addresses = ''
         unix_socket_directories = '$PGHOST'
@@ -40,5 +41,5 @@ rm -rf ignore/db
 
 [services.db]
 help = "Run postgres"
-command = ["/usr/bin/postgres", "-D", "db"]
+command = ["/usr/bin/postgres"]
 exec-before = ["db-create"]
