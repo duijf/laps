@@ -19,6 +19,8 @@ be a Linux cgroup API call/thing for this.
 
 Start processes in a a pseudo-terminal.
 
+Watches include a specific file whitelist as well.
+
 Allow for `[environment.<sub>]` objects and make those flags for `laps`. E.g.
 an `[environment.dev]` section corresponds to a `laps --dev` flag.
 
