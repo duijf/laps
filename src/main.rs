@@ -44,7 +44,7 @@ struct TomlConfig {
     watches: HashMap<String, TomlWatch>,
 }
 
-#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 struct UnitName(String);
 
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
@@ -143,11 +143,14 @@ fn main() -> Result<(), failure::Error> {
 fn get_help_text(config: Config) -> String {
     let mut help = "laps - Project automation\n\nCOMMANDS\n".to_string();
 
-    for (name, unit) in &config.units {
-        let spaces = &" ".repeat(12 - name.0.len());
+    let mut units: Vec<Unit> = config.units.iter().map(|(_k, v)| v.to_owned()).collect();
+    units.sort_by(|a, b| a.name.cmp(&b.name));
+
+    for unit in &units {
+        let spaces = &" ".repeat(12 - &unit.name.0.len());
         help.push_str(&format!(
             "  {name}{spaces}{description}\n",
-            name = name.0,
+            name = &unit.name.0,
             spaces = spaces,
             description = unit.description.0.as_str()
         ))
