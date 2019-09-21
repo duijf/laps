@@ -10,6 +10,9 @@ Clean up temp files on termination.
 
 Interpolate environment variables in command strings.
 
+A display thing for error messages. Include more meta-data for the current
+error enum. Don't return boxed errors.
+
 Make laps able to start more than 1 command.
 
 Ensure that all subprocesses are killed when the main process is. There should
