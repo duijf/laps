@@ -48,6 +48,9 @@ struct TomlConfig {
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct UnitName(String);
 
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+struct UnitDescription(String);
+
 #[derive(Debug, Clone)]
 struct CommandName(String);
 
@@ -57,6 +60,7 @@ struct CommandArgs(Vec<String>);
 #[derive(Debug, Clone)]
 struct Unit {
     name: UnitName,
+    description: UnitDescription,
     exec_spec: ExecSpec,
     wants: Vec<UnitName>,
 }
@@ -276,6 +280,7 @@ fn validate_config(toml_config: TomlConfig) -> Result<Config, failure::Error> {
             name.clone(),
             Unit {
                 name: name,
+                description: UnitDescription(command.description),
                 exec_spec: exec_spec,
                 wants: Vec::new(),
             },
@@ -290,6 +295,7 @@ fn validate_config(toml_config: TomlConfig) -> Result<Config, failure::Error> {
             name.clone(),
             Unit {
                 name: name,
+                description: UnitDescription(service.description),
                 exec_spec: exec_spec,
                 wants: service
                     .wants
@@ -320,6 +326,7 @@ fd -t f {extension_str} | entr {exec}
             name.clone(),
             Unit {
                 name: name,
+                description: UnitDescription(watch.description),
                 exec_spec: exec_spec,
                 wants: Vec::new(),
             },
