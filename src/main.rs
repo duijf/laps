@@ -207,6 +207,7 @@ fn read_toml_config() -> Result<TomlConfig, failure::Error> {
 
 fn get_exec_spec(
     name: &UnitName,
+    env: &HashMap<String, String>,
     exec: Option<Vec<String>>,
     exec_script: Option<String>,
 ) -> Result<ExecSpec, failure::Error> {
@@ -235,9 +236,15 @@ fn get_exec_spec(
 fn validate_config(toml_config: TomlConfig) -> Result<Config, failure::Error> {
     let mut units: HashMap<UnitName, Unit> = HashMap::new();
 
+    let mut exec_env = std::env::vars().collect::<HashMap<String, String>>();
+    for (key, value) in &toml_config.environment {
+        exec_env.insert(key.to_string(), value.to_string());
+    }
+
     for (name, command) in toml_config.commands {
         let name: UnitName = UnitName(name);
-        let exec_spec: ExecSpec = get_exec_spec(&name, command.exec, command.exec_script)?;
+        let exec_spec: ExecSpec =
+            get_exec_spec(&name, &exec_env, command.exec, command.exec_script)?;
         let prev = units.insert(
             name.clone(),
             Unit {
@@ -253,7 +260,8 @@ fn validate_config(toml_config: TomlConfig) -> Result<Config, failure::Error> {
 
     for (name, service) in toml_config.services {
         let name: UnitName = UnitName(name);
-        let exec_spec: ExecSpec = get_exec_spec(&name, service.exec, service.exec_script)?;
+        let exec_spec: ExecSpec =
+            get_exec_spec(&name, &exec_env, service.exec, service.exec_script)?;
         let prev = units.insert(
             name.clone(),
             Unit {
@@ -300,7 +308,7 @@ fd -t f {extension_str} | entr {exec}
     }
 
     let config = Config {
-        environment: toml_config.environment,
+        environment: exec_env,
         units: units,
     };
 
