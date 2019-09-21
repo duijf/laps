@@ -21,3 +21,14 @@ awkward.
 Interpolate environment variables in command strings.
 
 Implement file watching logic in Rust instead of relying on scripts.
+
+Virtual FS / chroot like features.
+
+Some caching stuff?
+
+Filtered output / ncurses app when running multiple services.
+
+Make it possible to filter loglevel of apps dynamically as long as they perform
+some structured logging. (Either: define protocol, or users specify regex)
+
+Filter on stderr / stdout.
