@@ -1,7 +1,7 @@
-use clap;
 use failure;
 use serde;
 use std::collections::{HashMap, HashSet};
+use std::env::Args;
 use std::fs::{File, Permissions};
 use std::io::Read;
 use std::io::Write;
@@ -63,6 +63,14 @@ struct Unit {
     description: UnitDescription,
     exec_spec: ExecSpec,
     wants: Vec<UnitName>,
+    typ: UnitType,
+}
+
+#[derive(Debug, Clone)]
+enum UnitType {
+    Service,
+    Command,
+    Watch,
 }
 
 #[derive(Debug, Clone)]
@@ -90,7 +98,7 @@ enum LapsError {
     #[fail(display = "Script failed")]
     UnitFailed,
     #[fail(display = "Service has unknown dependencies")]
-    UnknownDeps(String, HashSet<String>),
+    UnknownDeps(UnitName, UnitName),
 }
 
 fn main() -> Result<(), failure::Error> {
@@ -98,36 +106,16 @@ fn main() -> Result<(), failure::Error> {
     let validated_config: Config = validate_config(toml_config)?;
     println!("{:?}", validated_config);
 
-    // let sub_template = "{bin}\n\n  {about}\n\nUSAGE\n  {usage}";
-    // let mut subcommand_help: String = "".to_string();
+    let available_units: HashSet<UnitName> = validated_config.units.keys().cloned().collect();
+    let user_specified_units: HashSet<UnitName> = std::env::args()
+        .skip(1)
+        .map(|a| UnitName(a.trim().to_string()))
+        .collect();
 
-    // let mut subcommands: Vec<clap::App> = Vec::new();
-    // for (name, script) in &config.scripts {
-    //     let subcommand = clap::SubCommand::with_name(name)
-    //         .template(sub_template)
-    //         .about(script.description.as_str());
-    //     subcommands.push(subcommand);
+    println!("{:?}", user_specified_units);
 
-    //     subcommand_help.push_str("  ");
-    //     subcommand_help.push_str(name);
-    //     subcommand_help.push_str(&" ".repeat(12 - name.len()));
-    //     subcommand_help.push_str(script.description.as_str());
-    //     subcommand_help.push('\n');
-    // }
-
-    // let mut services_help: String = "".to_string();
-    // for (name, service) in &config.services {
-    //     let subcommand = clap::SubCommand::with_name(name)
-    //         .template(sub_template)
-    //         .about(service.description.as_str());
-    //     subcommands.push(subcommand);
-
-    //     services_help.push_str("  ");
-    //     services_help.push_str(name);
-    //     services_help.push_str(&" ".repeat(12 - name.len()));
-    //     services_help.push_str(service.description.as_str());
-    //     services_help.push('\n');
-    // }
+    let help_text = get_help_text(validated_config);
+    print!("{}", help_text);
 
     // let help_text: String = format!(
     //     "laps - Project automation.
@@ -139,14 +127,6 @@ fn main() -> Result<(), failure::Error> {
     //     subcommand_help = subcommand_help,
     //     services_help = services_help,
     // );
-
-    // let app: clap::App = clap::App::new("laps")
-    //     .version(clap::crate_version!())
-    //     .help(&*help_text)
-    //     .setting(clap::AppSettings::DisableHelpSubcommand)
-    //     .setting(clap::AppSettings::VersionlessSubcommands)
-    //     .setting(clap::AppSettings::SubcommandRequiredElseHelp)
-    //     .subcommands(subcommands);
 
     // let matches = app.get_matches();
 
@@ -160,31 +140,21 @@ fn main() -> Result<(), failure::Error> {
     Ok(())
 }
 
-// fn find_to_run(script_or_cmd_name: &str, config: &LapsConfig) -> Vec<ScriptOrService> {
-//     let config: LapsConfig = (config).to_owned();
+fn get_help_text(config: Config) -> String {
+    let mut help = "laps - Project automation\n\nCOMMANDS\n".to_string();
 
-//     if config.scripts.contains_key(script_or_cmd_name) {
-//         return vec![ScriptOrService::Script(
-//             (config.scripts.get(script_or_cmd_name).unwrap()).to_owned(),
-//         )];
-//     }
+    for (name, unit) in &config.units {
+        let spaces = &" ".repeat(12 - name.0.len());
+        help.push_str(&format!(
+            "  {name}{spaces}{description}\n",
+            name = name.0,
+            spaces = spaces,
+            description = unit.description.0.as_str()
+        ))
+    }
 
-//     let mut res = vec![];
-
-//     // Right now, we know it was a service instead of a script
-//     let service: TomlService = config.services.get(script_or_cmd_name).unwrap().to_owned();
-
-//     let service_orig = service.clone();
-
-//     for dep in service.exec_before {
-//         res.push(ScriptOrService::Script(
-//             config.scripts.get(&dep).unwrap().to_owned(),
-//         ));
-//     }
-//     res.push(ScriptOrService::Service(service_orig));
-
-//     res
-// }
+    help
+}
 
 // fn run(to_run: Vec<ScriptOrService>, config: LapsConfig) -> Result<(), failure::Error> {
 //     for thing in to_run {
@@ -279,6 +249,7 @@ fn validate_config(toml_config: TomlConfig) -> Result<Config, failure::Error> {
                 description: UnitDescription(command.description),
                 exec_spec: exec_spec,
                 wants: Vec::new(),
+                typ: UnitType::Command,
             },
         );
         failure::ensure!(prev.is_none(), LapsError::Duplicate)
@@ -298,6 +269,7 @@ fn validate_config(toml_config: TomlConfig) -> Result<Config, failure::Error> {
                     .iter()
                     .map(|s| UnitName(s.to_owned()))
                     .collect(),
+                typ: UnitType::Service,
             },
         );
         failure::ensure!(prev.is_none(), LapsError::Duplicate)
@@ -325,30 +297,31 @@ fd -t f {extension_str} | entr {exec}
                 description: UnitDescription(watch.description),
                 exec_spec: exec_spec,
                 wants: Vec::new(),
+                typ: UnitType::Watch,
             },
         );
         failure::ensure!(prev.is_none(), LapsError::Duplicate)
     }
 
-    Ok(Config {
+    let config = Config {
         environment: toml_config.environment,
         units: units,
-    })
+    };
+
+    let config = ensure_deps_exist(config)?;
+
+    Ok(config)
 }
 
-// fn ensure_deps_exist(config: LapsConfig) -> Result<LapsConfig, failure::Error> {
-//     let script_names: HashSet<String> = config.scripts.keys().cloned().collect();
+fn ensure_deps_exist(config: Config) -> Result<Config, failure::Error> {
+    for (name, unit) in &config.units {
+        for dep in &unit.wants {
+            failure::ensure!(
+                config.units.contains_key(&dep),
+                LapsError::UnknownDeps(name.clone(), dep.clone())
+            )
+        }
+    }
 
-//     for (name, service) in &config.services {
-//         let dependencies: HashSet<String> = service.exec_before.iter().cloned().collect();
-//         let unknown_deps: HashSet<String> =
-//             dependencies.difference(&script_names).cloned().collect();
-
-//         failure::ensure!(
-//             unknown_deps.len() == 0,
-//             LapsError::UnknownDeps(name.to_string(), unknown_deps)
-//         );
-//     }
-
-//     Ok(config)
-// }
+    Ok(config)
+}

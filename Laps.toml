@@ -13,7 +13,7 @@ exec = ["cargo", "build"]
 file-types = ["rs"]
 
 [services.db]
-description = "Run `cargo check` on file change"
+description = "Run Postgres"
 exec = ["postgres"]
 wants = ["db-setup"]
 
