@@ -11,6 +11,19 @@ use toml;
 
 #[derive(Debug, serde::Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
+struct Unit {
+    help: String,
+    exec_spec: ExecSpec,
+}
+
+#[derive(Debug, serde::Deserialize, Clone)]
+enum ExecSpec {
+    Script(String),
+    Command(Vec<String>),
+}
+
+#[derive(Debug, serde::Deserialize, Clone)]
+#[serde(rename_all = "kebab-case")]
 struct Script {
     help: String,
     script: String,
