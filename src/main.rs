@@ -55,7 +55,12 @@ struct UnitDescription(String);
 struct CommandName(String);
 
 #[derive(Debug, Clone)]
-struct CommandArgs(Vec<String>);
+enum ArgOrLookup {
+    Arg(String),
+    Lookup(String),
+}
+
+type CommandArgs = Vec<ArgOrLookup>;
 
 #[derive(Debug, Clone)]
 struct Unit {
@@ -99,6 +104,8 @@ enum LapsError {
     UnknownDeps(UnitName, UnitName),
     #[fail(display = "Unknown targets specified")]
     UnknownTargets(HashSet<UnitName>),
+    #[fail(display = "Bad lookup {}", _0)]
+    BadLookup(String),
 }
 
 fn main() -> Result<(), failure::Error> {
@@ -189,7 +196,15 @@ fn run_exec(
     args: &CommandArgs,
     env: &HashMap<String, String>,
 ) -> Result<(), failure::Error> {
-    let mut child = Command::new(&command.0).args(&args.0).envs(env).spawn()?;
+    let mut child = Command::new(&command.0)
+        .args(
+            &args
+                .iter()
+                .map(|a| arg_to_string(a.to_owned(), &env))
+                .collect::<Result<Vec<String>, failure::Error>>()?,
+        )
+        .envs(env)
+        .spawn()?;
     let exitcode = child.wait()?;
 
     failure::ensure!(exitcode.success(), LapsError::UnitFailed);
@@ -207,7 +222,6 @@ fn read_toml_config() -> Result<TomlConfig, failure::Error> {
 
 fn get_exec_spec(
     name: &UnitName,
-    env: &HashMap<String, String>,
     exec: Option<Vec<String>>,
     exec_script: Option<String>,
 ) -> Result<ExecSpec, failure::Error> {
@@ -222,7 +236,11 @@ fn get_exec_spec(
         failure::ensure!(exec.len() >= 1, LapsError::ExecCantBeEmpty);
 
         let command_name = CommandName(exec[0].to_owned());
-        let command_args = CommandArgs(exec[1..].to_vec()); // Potentially crashes.
+        let command_args = exec[1..].to_vec(); // Potentially crashes.
+        let command_args = command_args
+            .iter()
+            .map(|a| evaluate_arg(a.to_owned()))
+            .collect();
 
         return Ok(ExecSpec::Exec(command_name, command_args));
     }
@@ -231,6 +249,31 @@ fn get_exec_spec(
     }
 
     failure::bail!(LapsError::BadExec(name.to_owned()))
+}
+
+fn evaluate_arg(input: String) -> ArgOrLookup {
+    if !input.starts_with("$") {
+        return ArgOrLookup::Arg(input);
+    };
+
+    if input.starts_with("$$") {
+        return ArgOrLookup::Arg(input[1..].to_string());
+    };
+
+    ArgOrLookup::Lookup(input[1..].to_string())
+}
+
+fn arg_to_string(
+    arg_or_lookup: ArgOrLookup,
+    exec_env: &HashMap<String, String>,
+) -> Result<String, failure::Error> {
+    match arg_or_lookup {
+        ArgOrLookup::Arg(s) => Ok(s),
+        ArgOrLookup::Lookup(s) => {
+            let val = exec_env.get(&s).ok_or(LapsError::BadLookup(s.clone()))?;
+            Ok(val.to_string())
+        }
+    }
 }
 
 fn validate_config(toml_config: TomlConfig) -> Result<Config, failure::Error> {
@@ -243,8 +286,7 @@ fn validate_config(toml_config: TomlConfig) -> Result<Config, failure::Error> {
 
     for (name, command) in toml_config.commands {
         let name: UnitName = UnitName(name);
-        let exec_spec: ExecSpec =
-            get_exec_spec(&name, &exec_env, command.exec, command.exec_script)?;
+        let exec_spec: ExecSpec = get_exec_spec(&name, command.exec, command.exec_script)?;
         let prev = units.insert(
             name.clone(),
             Unit {
@@ -260,8 +302,7 @@ fn validate_config(toml_config: TomlConfig) -> Result<Config, failure::Error> {
 
     for (name, service) in toml_config.services {
         let name: UnitName = UnitName(name);
-        let exec_spec: ExecSpec =
-            get_exec_spec(&name, &exec_env, service.exec, service.exec_script)?;
+        let exec_spec: ExecSpec = get_exec_spec(&name, service.exec, service.exec_script)?;
         let prev = units.insert(
             name.clone(),
             Unit {
