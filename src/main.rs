@@ -31,8 +31,7 @@ struct TomlService {
 #[serde(rename_all = "kebab-case")]
 struct TomlWatch {
     description: String,
-    exec: Option<Vec<String>>,
-    exec_script: Option<String>,
+    exec: Vec<String>,
     #[serde(default=[])]
     file_types: Vec<String>,
 }
@@ -49,16 +48,26 @@ struct TomlConfig {
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct UnitName(String);
 
+#[derive(Debug, Clone)]
+struct CommandName(String);
+
+#[derive(Debug, Clone)]
+struct CommandArgs(Vec<String>);
+
+#[derive(Debug, Clone)]
 struct Unit {
     name: UnitName,
     exec_spec: ExecSpec,
+    wants: Vec<UnitName>,
 }
 
+#[derive(Debug, Clone)]
 enum ExecSpec {
-    Exec(Command),
+    Exec(CommandName, CommandArgs),
     ExecScript(String),
 }
 
+#[derive(Debug, Clone)]
 struct Config {
     units: HashMap<UnitName, Unit>,
     environment: HashMap<String, String>,
@@ -66,8 +75,14 @@ struct Config {
 
 #[derive(Debug, failure::Fail)]
 enum LapsError {
+    #[fail(display = "Watches, services, commands can only have one of `exec`, `exec-script`")]
+    BadExec,
+    #[fail(display = "Exec stanza cannot be empty")]
+    ExecCantBeEmpty,
     #[fail(display = "Duplicate names in scripts and services")]
     Duplicates(HashSet<String>),
+    #[fail(display = "Duplicate names somewhere")]
+    Duplicate,
     #[fail(display = "Please give a subcommand.")]
     MissingSubcommand,
     #[fail(display = "Script failed")]
@@ -81,6 +96,7 @@ enum LapsError {
 fn main() -> Result<(), failure::Error> {
     let toml_config: TomlConfig = read_toml_config()?;
     let validated_config: Config = validate_config(toml_config)?;
+    println!("{:?}", validated_config);
 
     // let sub_template = "{bin}\n\n  {about}\n\nUSAGE\n  {usage}";
     // let mut subcommand_help: String = "".to_string();
@@ -224,12 +240,97 @@ fn read_toml_config() -> Result<TomlConfig, failure::Error> {
     Ok(config)
 }
 
+fn get_exec_spec(
+    exec: Option<Vec<String>>,
+    exec_script: Option<String>,
+) -> Result<ExecSpec, failure::Error> {
+    failure::ensure!(
+        // Check exec and exec_script are set mututually exclusively.
+        exec.is_none() != exec_script.is_none(),
+        LapsError::BadExec
+    );
+
+    if exec.is_some() {
+        let exec: Vec<String> = exec.unwrap();
+        failure::ensure!(exec.len() >= 1, LapsError::ExecCantBeEmpty);
+
+        let command_name = CommandName(exec[0].to_owned());
+        let command_args = CommandArgs(exec[1..].to_vec()); // Potentially crashes.
+
+        return Ok(ExecSpec::Exec(command_name, command_args));
+    }
+    if exec_script.is_some() {
+        return Ok(ExecSpec::ExecScript(exec_script.unwrap()));
+    }
+
+    failure::bail!(LapsError::BadExec)
+}
+
 fn validate_config(toml_config: TomlConfig) -> Result<Config, failure::Error> {
-    let mut config = Config {
+    let mut units: HashMap<UnitName, Unit> = HashMap::new();
+
+    for (name, command) in toml_config.commands {
+        let name: UnitName = UnitName(name);
+        let exec_spec: ExecSpec = get_exec_spec(command.exec, command.exec_script)?;
+        let prev = units.insert(
+            name.clone(),
+            Unit {
+                name: name,
+                exec_spec: exec_spec,
+                wants: Vec::new(),
+            },
+        );
+        failure::ensure!(prev.is_none(), LapsError::Duplicate)
+    }
+
+    for (name, service) in toml_config.services {
+        let name: UnitName = UnitName(name);
+        let exec_spec: ExecSpec = get_exec_spec(service.exec, service.exec_script)?;
+        let prev = units.insert(
+            name.clone(),
+            Unit {
+                name: name,
+                exec_spec: exec_spec,
+                wants: service
+                    .wants
+                    .iter()
+                    .map(|s| UnitName(s.to_owned()))
+                    .collect(),
+            },
+        );
+        failure::ensure!(prev.is_none(), LapsError::Duplicate)
+    }
+
+    for (name, watch) in toml_config.watches {
+        let name: UnitName = UnitName(name);
+        // Ugly: a watch is a bash script calling `fd` and `entr`
+        let exec_spec: ExecSpec = ExecSpec::ExecScript(format!(
+            "#!/bin/bash
+fd -t f {extension_str} | entr {exec}
+",
+            extension_str = watch
+                .file_types
+                .iter()
+                .map(|e| format!("-e {}", e))
+                .collect::<Vec<String>>()
+                .join(" "),
+            exec = watch.exec.join(" ")
+        ));
+        let prev = units.insert(
+            name.clone(),
+            Unit {
+                name: name,
+                exec_spec: exec_spec,
+                wants: Vec::new(),
+            },
+        );
+        failure::ensure!(prev.is_none(), LapsError::Duplicate)
+    }
+
+    Ok(Config {
         environment: toml_config.environment,
-        units: HashMap::new(),
-    };
-    Ok(config)
+        units: units,
+    })
 }
 
 // fn check_duplicate_names(config: LapsConfig) -> Result<LapsConfig, failure::Error> {
