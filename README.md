@@ -8,6 +8,8 @@ Make scripts use a random filename when executing. Avoids race conditions and
 clashes. Also: use laps in the description; for watches it might be a bit
 awkward.
 
+Signal handling. Wait for child termination before exiting.
+
 Interpolate environment variables in command strings.
 
 Make laps able to start more than 1 command.
