@@ -41,6 +41,8 @@ enum LapsError {
     MissingSubcommand,
     #[fail(display = "Script failed")]
     ScriptFailed,
+    #[fail(display = "Service failed")]
+    ServiceFailed,
     #[fail(display = "Service has unknown dependencies")]
     UnknownDeps(String, HashSet<String>),
 }
@@ -145,8 +147,8 @@ fn find_to_run(script_or_cmd_name: &str, config: &LapsConfig) -> Vec<ScriptOrSer
 fn run(to_run: Vec<ScriptOrService>, config: LapsConfig) -> Result<(), failure::Error> {
     for thing in to_run {
         match thing {
-            ScriptOrService::Script(s) => run_script(&s, &config.env),
-            _ => Ok(()),
+            ScriptOrService::Script(script) => run_script(&script, &config.env),
+            ScriptOrService::Service(service) => run_service(&service, &config.env),
         };
     }
     Ok(())
@@ -171,6 +173,19 @@ fn run_script(script: &Script, env: &HashMap<String, String>) -> Result<(), fail
     let exitcode = child.wait()?;
 
     failure::ensure!(exitcode.success(), LapsError::ScriptFailed);
+
+    Ok(())
+}
+
+fn run_service(service: &Service, env: &HashMap<String, String>) -> Result<(), failure::Error> {
+    println!("Executing script");
+    let mut child = Command::new(service.command[0].clone())
+        .args(service.command[1..].iter())
+        .envs(env)
+        .spawn()?;
+    let exitcode = child.wait()?;
+
+    failure::ensure!(exitcode.success(), LapsError::ServiceFailed);
 
     Ok(())
 }
