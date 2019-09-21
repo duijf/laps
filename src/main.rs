@@ -9,14 +9,14 @@ use std::os::unix::fs::PermissionsExt;
 use std::process::Command;
 use toml;
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 struct Script {
     help: String,
     script: String,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 struct Service {
     help: String,
@@ -25,7 +25,7 @@ struct Service {
     exec_before: Vec<String>,
 }
 
-#[derive(Debug, serde::Deserialize)]
+#[derive(Debug, serde::Deserialize, Clone)]
 #[serde(rename_all = "kebab-case")]
 struct LapsConfig {
     env: HashMap<String, String>,
@@ -43,6 +43,11 @@ enum LapsError {
     ScriptFailed,
     #[fail(display = "Service has unknown dependencies")]
     UnknownDeps(String, HashSet<String>),
+}
+
+enum ScriptOrService {
+    Script(Script),
+    Service(Service),
 }
 
 fn main() -> Result<(), failure::Error> {
@@ -101,17 +106,53 @@ SERVICES
 
     let matches = app.get_matches();
 
-    let script: &Script = match matches.subcommand_name() {
-        Some(s) => config.scripts.get(s).unwrap(), // Safe; otherwise bug in clap.
-        None => failure::bail!(LapsError::MissingSubcommand),
-    };
+    let script_or_cmd_name = matches
+        .subcommand_name()
+        .ok_or(LapsError::MissingSubcommand)?;
 
-    run_script(script, config.env)?;
+    let to_run: Vec<ScriptOrService> = find_to_run(script_or_cmd_name, &config);
+    run(to_run, config)?;
 
     Ok(())
 }
 
-fn run_script(script: &Script, env: HashMap<String, String>) -> Result<(), failure::Error> {
+fn find_to_run(script_or_cmd_name: &str, config: &LapsConfig) -> Vec<ScriptOrService> {
+    let config: LapsConfig = (config).to_owned();
+
+    if config.scripts.contains_key(script_or_cmd_name) {
+        return vec![ScriptOrService::Script(
+            (config.scripts.get(script_or_cmd_name).unwrap()).to_owned(),
+        )];
+    }
+
+    let mut res = vec![];
+
+    // Right now, we know it was a service instead of a script
+    let service: Service = config.services.get(script_or_cmd_name).unwrap().to_owned();
+
+    let service_orig = service.clone();
+
+    for dep in service.exec_before {
+        res.push(ScriptOrService::Script(
+            config.scripts.get(&dep).unwrap().to_owned(),
+        ));
+    }
+    res.push(ScriptOrService::Service(service_orig));
+
+    res
+}
+
+fn run(to_run: Vec<ScriptOrService>, config: LapsConfig) -> Result<(), failure::Error> {
+    for thing in to_run {
+        match thing {
+            ScriptOrService::Script(s) => run_script(&s, &config.env),
+            _ => Ok(()),
+        };
+    }
+    Ok(())
+}
+
+fn run_script(script: &Script, env: &HashMap<String, String>) -> Result<(), failure::Error> {
     let file_path: std::path::PathBuf = [std::env::temp_dir(), "laps-script".into()]
         .iter()
         .collect();
