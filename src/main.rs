@@ -104,7 +104,6 @@ enum LapsError {
 fn main() -> Result<(), failure::Error> {
     let toml_config: TomlConfig = read_toml_config()?;
     let validated_config: Config = validate_config(toml_config)?;
-    println!("{:?}", validated_config);
 
     let available_units: HashSet<UnitName> = validated_config.units.keys().cloned().collect();
     let user_specified_units: HashSet<UnitName> = std::env::args()
@@ -112,27 +111,11 @@ fn main() -> Result<(), failure::Error> {
         .map(|a| UnitName(a.trim().to_string()))
         .collect();
 
-    println!("{:?}", user_specified_units);
-
-    let help_text = get_help_text(validated_config);
-    print!("{}", help_text);
-
-    // let help_text: String = format!(
-    //     "laps - Project automation.
-
-    // COMMANDS
-    // {subcommand_help}
-    // SERVICES
-    // {services_help}",
-    //     subcommand_help = subcommand_help,
-    //     services_help = services_help,
-    // );
-
-    // let matches = app.get_matches();
-
-    // let script_or_cmd_name = matches
-    //     .subcommand_name()
-    //     .ok_or(LapsError::MissingSubcommand)?;
+    if (user_specified_units.len() == 0) {
+        let help_text = get_help_text(validated_config);
+        print!("{}", help_text);
+        return Ok(());
+    }
 
     // let to_run: Vec<ScriptOrService> = find_to_run(script_or_cmd_name, &config);
     // run(to_run, config)?;
@@ -155,16 +138,6 @@ fn get_help_text(config: Config) -> String {
 
     help
 }
-
-// fn run(to_run: Vec<ScriptOrService>, config: LapsConfig) -> Result<(), failure::Error> {
-//     for thing in to_run {
-//         match thing {
-//             ScriptOrService::Script(script) => run_script(&script, &config.environment),
-//             ScriptOrService::Service(service) => run_service(&service, &config.environment),
-//         };
-//     }
-//     Ok(())
-// }
 
 // fn run_script(script: &TomlCommand, env: &HashMap<String, String>) -> Result<(), failure::Error> {
 //     let file_path: std::path::PathBuf = [std::env::temp_dir(), "laps-script".into()]
