@@ -171,7 +171,7 @@ fn run_exec_script(
     let mut file = File::create(&file_path)?;
     file.set_permissions(perms)?;
     file.write_all(script_contents.as_bytes())?;
-    drop(file);
+    drop(file); // Avoid file-busy errors when executing/removing.
 
     let mut child = Command::new(&file_path).envs(env).spawn()?;
     let exitcode = child.wait()?;
