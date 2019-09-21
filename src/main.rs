@@ -1,4 +1,5 @@
 use failure;
+use rand;
 use serde;
 use std::collections::{HashMap, HashSet};
 use std::fs::{File, Permissions};
@@ -132,7 +133,7 @@ fn main() -> Result<(), failure::Error> {
                 run_exec(command, args, &validated_config.environment)?
             }
             ExecSpec::ExecScript(script_content) => {
-                run_exec_script(script_content, &validated_config.environment)?
+                run_exec_script(&unit_name, script_content, &validated_config.environment)?
             }
         }
     }
@@ -160,25 +161,26 @@ fn get_help_text(config: Config) -> String {
 }
 
 fn run_exec_script(
+    name: &UnitName,
     script_contents: &String,
     env: &HashMap<String, String>,
 ) -> Result<(), failure::Error> {
-    let file_path: std::path::PathBuf = [std::env::temp_dir(), "laps-script".into()]
-        .iter()
-        .collect();
+    let nonce: u32 = rand::random();
+    let file_name: std::path::PathBuf = format!("laps-{}-{:x}", name.0, nonce).into();
+    let script_path: std::path::PathBuf = [std::env::temp_dir(), file_name].iter().collect();
 
     let perms = Permissions::from_mode(0o700);
-    let mut file = File::create(&file_path)?;
+    let mut file = File::create(&script_path)?;
     file.set_permissions(perms)?;
     file.write_all(script_contents.as_bytes())?;
     drop(file); // Avoid file-busy errors when executing/removing.
 
-    let mut child = Command::new(&file_path).envs(env).spawn()?;
+    let mut child = Command::new(&script_path).envs(env).spawn()?;
     let exitcode = child.wait()?;
 
     failure::ensure!(exitcode.success(), LapsError::UnitFailed);
 
-    std::fs::remove_file(&file_path)?;
+    std::fs::remove_file(&script_path)?;
     Ok(())
 }
 
