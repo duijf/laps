@@ -46,6 +46,24 @@ struct TomlConfig {
     watches: HashMap<String, TomlWatch>,
 }
 
+#[derive(Debug, Clone, Hash, PartialEq, Eq)]
+struct UnitName(String);
+
+struct Unit {
+    name: UnitName,
+    exec_spec: ExecSpec,
+}
+
+enum ExecSpec {
+    Exec(Command),
+    ExecScript(String),
+}
+
+struct Config {
+    units: HashMap<UnitName, Unit>,
+    environment: HashMap<String, String>,
+}
+
 #[derive(Debug, failure::Fail)]
 enum LapsError {
     #[fail(display = "Duplicate names in scripts and services")]
@@ -61,8 +79,8 @@ enum LapsError {
 }
 
 fn main() -> Result<(), failure::Error> {
-    let config = read_toml_config()?;
-    println!("{:?}", config);
+    let toml_config: TomlConfig = read_toml_config()?;
+    let validated_config: Config = validate_config(toml_config)?;
 
     // let sub_template = "{bin}\n\n  {about}\n\nUSAGE\n  {usage}";
     // let mut subcommand_help: String = "".to_string();
@@ -203,10 +221,14 @@ fn read_toml_config() -> Result<TomlConfig, failure::Error> {
     let mut content = String::new();
     file.read_to_string(&mut content)?;
     let config: TomlConfig = toml::from_str(&content)?;
+    Ok(config)
+}
 
-    // let config = check_duplicate_names(config)?;
-    // let config = ensure_deps_exist(config)?;
-
+fn validate_config(toml_config: TomlConfig) -> Result<Config, failure::Error> {
+    let mut config = Config {
+        environment: toml_config.environment,
+        units: HashMap::new(),
+    };
     Ok(config)
 }
 
