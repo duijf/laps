@@ -133,19 +133,29 @@ fn main() -> Result<(), failure::Error> {
         LapsError::UnknownTargets(unknown_targets)
     );
 
-    for unit_name in user_specified_units {
-        let unit = validated_config.units.get(&unit_name).unwrap();
-        match &unit.exec_spec {
-            ExecSpec::Exec(command, args) => {
-                run_exec(command, args, &validated_config.environment)?
-            }
-            ExecSpec::ExecScript(script_content) => {
-                run_exec_script(&unit_name, script_content, &validated_config.environment)?
+    let exec_plan: Plan = get_exec_plan(&user_specified_units, &validated_config)?;
+
+    for step in exec_plan {
+        for unit in step {
+            match &unit.exec_spec {
+                ExecSpec::Exec(command, args) => {
+                    run_exec(command, args, &validated_config.environment)?
+                }
+                ExecSpec::ExecScript(script_content) => {
+                    run_exec_script(&unit.name, script_content, &validated_config.environment)?
+                }
             }
         }
     }
 
     Ok(())
+}
+
+type Plan = Vec<Step>;
+type Step = Vec<Unit>;
+
+fn get_exec_plan(user_units: &HashSet<UnitName>, config: &Config) -> Result<Plan, failure::Error> {
+    Ok(Vec::new())
 }
 
 fn get_help_text(config: Config) -> String {
