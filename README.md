@@ -4,11 +4,9 @@ Laps is a project automation tool. Status: pre-alpha.
 
 ## Ideas
 
-Make scripts use a random filename when executing. Avoids race conditions and
-clashes. Also: use laps in the description; for watches it might be a bit
-awkward.
-
 Signal handling. Wait for child termination before exiting.
+
+Clean up temp files on termination.
 
 Interpolate environment variables in command strings.
 
@@ -37,3 +35,7 @@ Virtual FS / chroot like features.
 
 Some caching stuff?
 
+## Implemented
+
+Make scripts use a random filename when executing. (Avoids race conditions and
+clashes.)
