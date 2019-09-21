@@ -1,7 +1,6 @@
 use failure;
 use serde;
 use std::collections::{HashMap, HashSet};
-use std::env::Args;
 use std::fs::{File, Permissions};
 use std::io::Read;
 use std::io::Write;
@@ -93,12 +92,12 @@ enum LapsError {
     ExecCantBeEmpty,
     #[fail(display = "Duplicate names somewhere")]
     Duplicate,
-    #[fail(display = "Please give a subcommand.")]
-    MissingSubcommand,
     #[fail(display = "Script failed")]
     UnitFailed,
     #[fail(display = "Service has unknown dependencies")]
     UnknownDeps(UnitName, UnitName),
+    #[fail(display = "Unknown targets specified")]
+    UnknownTargets(HashSet<UnitName>),
 }
 
 fn main() -> Result<(), failure::Error> {
@@ -111,14 +110,32 @@ fn main() -> Result<(), failure::Error> {
         .map(|a| UnitName(a.trim().to_string()))
         .collect();
 
-    if (user_specified_units.len() == 0) {
+    if user_specified_units.len() == 0 {
         let help_text = get_help_text(validated_config);
         print!("{}", help_text);
         return Ok(());
     }
 
-    // let to_run: Vec<ScriptOrService> = find_to_run(script_or_cmd_name, &config);
-    // run(to_run, config)?;
+    let unknown_targets: HashSet<UnitName> = user_specified_units
+        .difference(&available_units)
+        .cloned()
+        .collect();
+    failure::ensure!(
+        unknown_targets.len() == 0,
+        LapsError::UnknownTargets(unknown_targets)
+    );
+
+    for unit_name in user_specified_units {
+        let unit = validated_config.units.get(&unit_name).unwrap();
+        match &unit.exec_spec {
+            ExecSpec::Exec(command, args) => {
+                run_exec(command, args, &validated_config.environment)?
+            }
+            ExecSpec::ExecScript(script_content) => {
+                run_exec_script(script_content, &validated_config.environment)?
+            }
+        }
+    }
 
     Ok(())
 }
@@ -139,41 +156,45 @@ fn get_help_text(config: Config) -> String {
     help
 }
 
-// fn run_script(script: &TomlCommand, env: &HashMap<String, String>) -> Result<(), failure::Error> {
-//     let file_path: std::path::PathBuf = [std::env::temp_dir(), "laps-script".into()]
-//         .iter()
-//         .collect();
+fn run_exec_script(
+    script_contents: &String,
+    env: &HashMap<String, String>,
+) -> Result<(), failure::Error> {
+    let file_path: std::path::PathBuf = [std::env::temp_dir(), "laps-script".into()]
+        .iter()
+        .collect();
 
-//     println!("Writing script contents to {:?}", file_path);
-//     let mut file = File::create(file_path.clone())?;
-//     file.write_all(script.script.as_bytes())?;
-//     drop(file);
+    println!("Writing script contents to {:?}", file_path);
+    let mut file = File::create(file_path.clone())?;
+    file.write_all(script_contents.as_bytes())?;
+    drop(file);
 
-//     println!("Setting script permissions");
-//     let perms = Permissions::from_mode(0o755);
-//     std::fs::set_permissions(file_path.clone(), perms)?;
+    println!("Setting script permissions");
+    let perms = Permissions::from_mode(0o755);
+    std::fs::set_permissions(file_path.clone(), perms)?;
 
-//     println!("Executing script");
-//     let mut child = Command::new(file_path).envs(env).spawn()?;
-//     let exitcode = child.wait()?;
+    println!("Executing script");
+    let mut child = Command::new(file_path).envs(env).spawn()?;
+    let exitcode = child.wait()?;
 
-//     failure::ensure!(exitcode.success(), LapsError::ScriptFailed);
+    failure::ensure!(exitcode.success(), LapsError::UnitFailed);
 
-//     Ok(())
-// }
+    Ok(())
+}
 
-// fn run_service(service: &TomlService, env: &HashMap<String, String>) -> Result<(), failure::Error> {
-//     println!("Executing script");
-//     let mut child = Command::new(service.command[0].clone())
-//         .args(service.command[1..].iter())
-//         .envs(env)
-//         .spawn()?;
-//     let exitcode = child.wait()?;
+fn run_exec(
+    command: &CommandName,
+    args: &CommandArgs,
+    env: &HashMap<String, String>,
+) -> Result<(), failure::Error> {
+    println!("Executing script");
+    let mut child = Command::new(&command.0).args(&args.0).envs(env).spawn()?;
+    let exitcode = child.wait()?;
 
-//     failure::ensure!(exitcode.success(), LapsError::ServiceFailed);
+    failure::ensure!(exitcode.success(), LapsError::UnitFailed);
 
-//     Ok(())
-// }
+    Ok(())
+}
 
 fn read_toml_config() -> Result<TomlConfig, failure::Error> {
     let mut file = std::fs::File::open("Laps.toml")?;
