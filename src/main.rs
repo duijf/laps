@@ -8,6 +8,8 @@ use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::CommandExt;
 use std::process::{Child, Command};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use toml;
 
 #[derive(Debug, serde::Deserialize, Clone)]
@@ -99,8 +101,6 @@ enum LapsError {
     ExecCantBeEmpty,
     #[fail(display = "Duplicate names somewhere")]
     Duplicate,
-    #[fail(display = "Script failed")]
-    UnitFailed,
     #[fail(display = "Service has unknown dependencies")]
     UnknownDeps(UnitName, UnitName),
     #[fail(display = "Unknown targets specified")]
@@ -136,13 +136,19 @@ fn main() -> Result<(), failure::Error> {
 
     let exec_plan: Plan = get_exec_plan(&user_specified_units, &validated_config)?;
 
+    let running = Arc::new(AtomicBool::new(true));
+    let r = running.clone();
+    ctrlc::set_handler(move || {
+        r.store(false, Ordering::SeqCst);
+    })?;
+
     for step in exec_plan {
-        let mut started_children: HashMap<&UnitName, Child> = HashMap::new();
-        let mut finished_children: HashMap<&UnitName, Child> = HashMap::new();
+        let mut children: Vec<(&UnitName, bool, Child)> = Vec::new();
 
         for unit in &step {
-            started_children.insert(
+            children.push((
                 &unit.name,
+                true,
                 match &unit.exec_spec {
                     ExecSpec::Exec(command, args) => {
                         run_exec(command, args, &validated_config.environment)?
@@ -151,13 +157,35 @@ fn main() -> Result<(), failure::Error> {
                         run_exec_script(&unit.name, script_content, &validated_config.environment)?
                     }
                 },
-            );
+            ));
         }
 
-        // Wait on children, handle singals.
-        loop {
-            break;
+        // Wait on children to terminate by themselves so we can continue in the plan.
+        // This loop is also exited when the user sent a termination signal. In that
+        // case, we detect the signal and clean up at hte end of this step.
+        let mut running_children = children.len();
+        while running.load(Ordering::SeqCst) {
+            if running_children == 0 {
+                break;
+            }
+            println!("{}", running_children);
+
+            for (_unit_name, child_running, child) in children.iter_mut() {
+                if *child_running {
+                    if let Some(_exit_code) = child.try_wait()? {
+                        // TODO: Report ungraceful exit in some way?
+
+                        *child_running = false;
+                        running_children -= 1;
+                    }
+                }
+            }
+
+            std::thread::sleep(std::time::Duration::from_millis(200));
         }
+
+        // Termination. Kill all children and exit.
+        if !running.load(Ordering::SeqCst) {}
     }
 
     Ok(())
