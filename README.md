@@ -13,7 +13,6 @@ Clean up temp files on termination.
 A display thing for error messages. Include more meta-data for the current
 error enum. Don't return boxed errors.
 
-Make laps able to start more than 1 command.
 
 Ensure that all subprocesses are killed when the main process is. There should
 be a Linux cgroup API call/thing for this.
@@ -45,3 +44,5 @@ clashes.)
 
 Interpolate environment variables in command strings. (Escape the dolar sign
 with `$$`).
+
+Make laps able to start more than 1 command.
