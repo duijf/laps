@@ -93,6 +93,13 @@ enum UnitType {
     Watch,
 }
 
+// TODO: We cannot clone this, so we cannot put it in `Unit`.
+enum UnitStatus {
+    Inactive,
+    Running(Child, Pid)
+    Finished(ExitCode),
+}
+
 #[derive(Debug, Clone)]
 enum ExecSpec {
     Exec(CommandName, CommandArgs),
