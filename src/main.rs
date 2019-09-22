@@ -3,11 +3,12 @@ use nix::unistd::Pid;
 use rand;
 use serde;
 use std::collections::{HashMap, HashSet};
-use std::fs::{File, Permissions};
+use std::fs::{remove_dir_all, DirBuilder, File, Permissions};
 use std::io::Read;
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::CommandExt;
+use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -143,6 +144,16 @@ fn main() -> Result<(), failure::Error> {
         r.store(false, Ordering::SeqCst);
     })?;
 
+    let temp_dir_base: PathBuf = [
+        std::env::temp_dir(),
+        format!("laps-{:x}", rand::random::<u32>()).into(),
+    ]
+    .iter()
+    .collect();
+
+    DirBuilder::new().recursive(true).create(&temp_dir_base)?;
+    std::fs::set_permissions(&temp_dir_base, Permissions::from_mode(0o700))?;
+
     for step in exec_plan {
         let mut children: Vec<(&UnitName, bool, Child)> = Vec::new();
 
@@ -154,9 +165,12 @@ fn main() -> Result<(), failure::Error> {
                     ExecSpec::Exec(command, args) => {
                         run_exec(command, args, &validated_config.environment)?
                     }
-                    ExecSpec::ExecScript(script_content) => {
-                        run_exec_script(&unit.name, script_content, &validated_config.environment)?
-                    }
+                    ExecSpec::ExecScript(script_content) => run_exec_script(
+                        &unit.name,
+                        script_content,
+                        &validated_config.environment,
+                        &temp_dir_base,
+                    )?,
                 },
             ));
         }
@@ -215,6 +229,8 @@ fn main() -> Result<(), failure::Error> {
         }
     }
 
+    remove_dir_all(&temp_dir_base)?;
+
     Ok(())
 }
 
@@ -255,10 +271,9 @@ fn run_exec_script(
     name: &UnitName,
     script_contents: &String,
     env: &HashMap<String, String>,
+    temp_dir_base: &PathBuf,
 ) -> Result<Child, failure::Error> {
-    let nonce: u32 = rand::random();
-    let file_name: std::path::PathBuf = format!("laps-{}-{:x}", name.0, nonce).into();
-    let script_path: std::path::PathBuf = [std::env::temp_dir(), file_name].iter().collect();
+    let script_path: PathBuf = temp_dir_base.join(format!("{}", name.0));
 
     let perms = Permissions::from_mode(0o700);
     let mut file = File::create(&script_path)?;
