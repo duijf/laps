@@ -36,3 +36,11 @@ fi
 [commands.db-remove]
 description = "Remove development DB"
 exec = ["rm", "-rf", "$PGDATA"]
+
+[commands.doc]
+description = "Get all docs"
+exec-script = '''
+#!/bin/bash
+cargo doc --open
+rustup doc --std
+'''
