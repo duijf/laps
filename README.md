@@ -6,8 +6,6 @@ Laps is a project automation tool. Status: pre-alpha.
 
 Plan the execution of services and dependencies.
 
-Clean up temp files on termination.
-
 A display thing for error messages. Include more meta-data for the current
 error enum. Don't return boxed errors.
 
@@ -45,3 +43,5 @@ Ensure that all subprocesses are killed when the main process is. We use UNIX
 process groups for sending signals to multiple PIDs.
 
 Signal handling. Wait for child termination before exiting.
+
+Clean up temp files on termination.
