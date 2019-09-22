@@ -196,7 +196,9 @@ fn main() -> Result<(), failure::Error> {
                 match child.try_wait() {
                     Ok(Some(_exit_code)) => continue, // Child has been terminated after all.
                     Ok(None) => {
-                        // Find the process group ID, kill it, wait for results.
+                        // Find the process group ID, kill it, wait for results. This ensures
+                        // that there are never any processes left running when we terminate
+                        // laps.
                         let child_pid: Pid = Pid::from_raw(child.id() as i32);
                         let child_pgid = nix::unistd::getpgid(Some(child_pid)).unwrap();
                         nix::sys::signal::kill(child_pgid, nix::sys::signal::Signal::SIGTERM)
