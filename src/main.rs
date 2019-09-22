@@ -254,6 +254,9 @@ fn main() -> Result<(), failure::Error> {
 type Plan = Vec<Step>;
 type Step = Vec<Unit>;
 
+// TODO: The type here needs to change to some graph like structure that we can
+// actively traverse. Otherwise, we can never start units at the earliest moment
+// in time possible.
 fn get_exec_plan(
     user_unit_names: &HashSet<UnitName>,
     config: &Config,
