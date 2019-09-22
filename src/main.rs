@@ -1,4 +1,5 @@
 use failure;
+use nix::unistd::Pid;
 use rand;
 use serde;
 use std::collections::{HashMap, HashSet};
@@ -162,7 +163,7 @@ fn main() -> Result<(), failure::Error> {
 
         // Wait on children to terminate by themselves so we can continue in the plan.
         // This loop is also exited when the user sent a termination signal. In that
-        // case, we detect the signal and clean up at hte end of this step.
+        // case, we detect the signal and clean up at the end of this step.
         let mut running_children = children.len();
         while running.load(Ordering::SeqCst) {
             if running_children == 0 {
@@ -171,13 +172,15 @@ fn main() -> Result<(), failure::Error> {
             println!("{}", running_children);
 
             for (_unit_name, child_running, child) in children.iter_mut() {
-                if *child_running {
-                    if let Some(_exit_code) = child.try_wait()? {
-                        // TODO: Report ungraceful exit in some way?
+                if !*child_running {
+                    continue;
+                }
 
-                        *child_running = false;
-                        running_children -= 1;
-                    }
+                if let Some(_exit_code) = child.try_wait()? {
+                    // TODO: Report ungraceful exit in some way?
+
+                    *child_running = false;
+                    running_children -= 1;
                 }
             }
 
@@ -185,7 +188,30 @@ fn main() -> Result<(), failure::Error> {
         }
 
         // Termination. Kill all children and exit.
-        if !running.load(Ordering::SeqCst) {}
+        if !running.load(Ordering::SeqCst) {
+            for (_unit_name, child_running, child) in children.iter_mut() {
+                if !*child_running {
+                    continue;
+                }
+
+                match child.try_wait() {
+                    Ok(Some(_exit_code)) => continue, // Child has been terminated after all.
+                    Ok(None) => {
+                        // Find the process group ID, kill it, wait for results.
+                        let child_pid: Pid = Pid::from_raw(child.id() as i32);
+                        let child_pgid = nix::unistd::getpgid(Some(child_pid)).unwrap();
+                        nix::sys::signal::kill(child_pgid, nix::sys::signal::Signal::SIGTERM)
+                            .unwrap();
+
+                        nix::sys::wait::waitpid(child_pgid, None).unwrap();
+                    }
+                    Err(_) => {
+                        // TODO: What should happen here?
+                        continue;
+                    }
+                }
+            }
+        }
     }
 
     Ok(())
