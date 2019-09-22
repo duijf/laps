@@ -169,7 +169,6 @@ fn main() -> Result<(), failure::Error> {
             if running_children == 0 {
                 break;
             }
-            println!("{}", running_children);
 
             for (_unit_name, child_running, child) in children.iter_mut() {
                 if !*child_running {
