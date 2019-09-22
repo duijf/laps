@@ -20,6 +20,10 @@ struct TomlCommand {
     description: String,
     exec: Option<Vec<String>>,
     exec_script: Option<String>,
+    #[serde(default)]
+    wants: Vec<String>,
+    #[serde(default)]
+    after: Vec<String>,
 }
 
 #[derive(Debug, serde::Deserialize, Clone)]
@@ -28,8 +32,10 @@ struct TomlService {
     description: String,
     exec: Option<Vec<String>>,
     exec_script: Option<String>,
-    #[serde(default=[])]
+    #[serde(default)]
     wants: Vec<String>,
+    #[serde(default)]
+    after: Vec<String>,
 }
 
 #[derive(Debug, serde::Deserialize, Clone)]
@@ -37,8 +43,12 @@ struct TomlService {
 struct TomlWatch {
     description: String,
     exec: Vec<String>,
-    #[serde(default=[])]
+    #[serde(default)]
     file_types: Vec<String>,
+    #[serde(default)]
+    wants: Vec<String>,
+    #[serde(default)]
+    after: Vec<String>,
 }
 
 #[derive(Debug, serde::Deserialize, Clone)]
