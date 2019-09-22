@@ -6,6 +6,7 @@ use std::fs::{File, Permissions};
 use std::io::Read;
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
+use std::os::unix::process::CommandExt;
 use std::process::Command;
 use toml;
 
@@ -213,15 +214,31 @@ fn run_exec(
     args: &CommandArgs,
     env: &HashMap<String, String>,
 ) -> Result<(), failure::Error> {
-    let mut child = Command::new(&command.0)
-        .args(
-            &args
-                .iter()
-                .map(|a| arg_to_string(a.to_owned(), &env))
-                .collect::<Result<Vec<String>, failure::Error>>()?,
-        )
-        .envs(env)
-        .spawn()?;
+    let mut child = unsafe {
+        Command::new(&command.0)
+            .args(
+                &args
+                    .iter()
+                    .map(|a| arg_to_string(a.to_owned(), &env))
+                    .collect::<Result<Vec<String>, failure::Error>>()?,
+            )
+            .envs(env)
+            // Ensure that any children we spawn also receive SIGTERM and SIGKILL when
+            // this process receives them. That should alleviate all the problems that
+            // foreman has with processes keeping running when foreman has terminated.
+            //
+            // The stdlib docs mention that the reason this funciton is unsafe is
+            // because you should take care not to mess up file descriptors and
+            // such.
+            .pre_exec(|| {
+                nix::unistd::setsid().map(|_| ()).map_err(|e| match e {
+                    nix::Error::Sys(errno) => std::io::Error::from_raw_os_error(errno as i32),
+                    _ => std::io::Error::new(std::io::ErrorKind::Other, e),
+                })
+            })
+            .spawn()
+    }?;
+
     let exitcode = child.wait()?;
 
     failure::ensure!(exitcode.success(), LapsError::UnitFailed);
