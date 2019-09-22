@@ -7,7 +7,7 @@ use std::io::Read;
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::CommandExt;
-use std::process::Command;
+use std::process::{Child, Command};
 use toml;
 
 #[derive(Debug, serde::Deserialize, Clone)]
@@ -137,15 +137,26 @@ fn main() -> Result<(), failure::Error> {
     let exec_plan: Plan = get_exec_plan(&user_specified_units, &validated_config)?;
 
     for step in exec_plan {
-        for unit in step {
-            match &unit.exec_spec {
-                ExecSpec::Exec(command, args) => {
-                    run_exec(command, args, &validated_config.environment)?
-                }
-                ExecSpec::ExecScript(script_content) => {
-                    run_exec_script(&unit.name, script_content, &validated_config.environment)?
-                }
-            }
+        let mut started_children: HashMap<&UnitName, Child> = HashMap::new();
+        let mut finished_children: HashMap<&UnitName, Child> = HashMap::new();
+
+        for unit in &step {
+            started_children.insert(
+                &unit.name,
+                match &unit.exec_spec {
+                    ExecSpec::Exec(command, args) => {
+                        run_exec(command, args, &validated_config.environment)?
+                    }
+                    ExecSpec::ExecScript(script_content) => {
+                        run_exec_script(&unit.name, script_content, &validated_config.environment)?
+                    }
+                },
+            );
+        }
+
+        // Wait on children, handle singals.
+        loop {
+            break;
         }
     }
 
@@ -189,7 +200,7 @@ fn run_exec_script(
     name: &UnitName,
     script_contents: &String,
     env: &HashMap<String, String>,
-) -> Result<(), failure::Error> {
+) -> Result<Child, failure::Error> {
     let nonce: u32 = rand::random();
     let file_name: std::path::PathBuf = format!("laps-{}-{:x}", name.0, nonce).into();
     let script_path: std::path::PathBuf = [std::env::temp_dir(), file_name].iter().collect();
@@ -200,21 +211,17 @@ fn run_exec_script(
     file.write_all(script_contents.as_bytes())?;
     drop(file); // Avoid file-busy errors when executing/removing.
 
-    let mut child = Command::new(&script_path).envs(env).spawn()?;
-    let exitcode = child.wait()?;
+    let child = Command::new(&script_path).envs(env).spawn()?;
 
-    failure::ensure!(exitcode.success(), LapsError::UnitFailed);
-
-    std::fs::remove_file(&script_path)?;
-    Ok(())
+    Ok(child)
 }
 
 fn run_exec(
     command: &CommandName,
     args: &CommandArgs,
     env: &HashMap<String, String>,
-) -> Result<(), failure::Error> {
-    let mut child = unsafe {
+) -> Result<Child, failure::Error> {
+    let child = unsafe {
         Command::new(&command.0)
             .args(
                 &args
@@ -239,11 +246,7 @@ fn run_exec(
             .spawn()
     }?;
 
-    let exitcode = child.wait()?;
-
-    failure::ensure!(exitcode.success(), LapsError::UnitFailed);
-
-    Ok(())
+    Ok(child)
 }
 
 fn read_toml_config() -> Result<TomlConfig, failure::Error> {
