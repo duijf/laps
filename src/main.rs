@@ -154,8 +154,15 @@ fn main() -> Result<(), failure::Error> {
 type Plan = Vec<Step>;
 type Step = Vec<Unit>;
 
-fn get_exec_plan(user_units: &HashSet<UnitName>, config: &Config) -> Result<Plan, failure::Error> {
-    Ok(Vec::new())
+fn get_exec_plan(
+    user_unit_names: &HashSet<UnitName>,
+    config: &Config,
+) -> Result<Plan, failure::Error> {
+    let mut step = Vec::new();
+    for unit_name in user_unit_names {
+        step.push(config.units.get(unit_name).unwrap().clone());
+    }
+    Ok(vec![step])
 }
 
 fn get_help_text(config: Config) -> String {
