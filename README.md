@@ -45,3 +45,11 @@ process groups for sending signals to multiple PIDs.
 Signal handling. Wait for child termination before exiting.
 
 Clean up temp files on termination.
+
+## Inspiration
+
+Laps borrows a lot of ideas from the following tools:
+
+ - SystemD
+ - Foreman
+ - Dotenv
