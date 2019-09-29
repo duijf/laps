@@ -9,7 +9,7 @@ use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
-use std::process::{Child, Command};
+use std::process::{Child, Command, ExitStatus};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use toml;
@@ -96,8 +96,8 @@ enum UnitType {
 // TODO: We cannot clone this, so we cannot put it in `Unit`.
 enum UnitStatus {
     Inactive,
-    Running(Child, Pid)
-    Finished(ExitCode),
+    Running(Child, Pid),
+    Finished(ExitStatus),
 }
 
 #[derive(Debug, Clone)]
