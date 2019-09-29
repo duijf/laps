@@ -83,6 +83,7 @@ struct Unit {
     description: UnitDescription,
     exec_spec: ExecSpec,
     wants: Vec<UnitName>,
+    after: Vec<UnitName>,
     typ: UnitType,
 }
 
@@ -420,7 +421,16 @@ fn validate_config(toml_config: TomlConfig) -> Result<Config, failure::Error> {
                 name: name,
                 description: UnitDescription(command.description),
                 exec_spec: exec_spec,
-                wants: Vec::new(),
+                wants: command
+                    .wants
+                    .iter()
+                    .map(|s| UnitName(s.to_owned()))
+                    .collect(),
+                after: command
+                    .after
+                    .iter()
+                    .map(|s| UnitName(s.to_owned()))
+                    .collect(),
                 typ: UnitType::Command,
             },
         );
@@ -438,6 +448,11 @@ fn validate_config(toml_config: TomlConfig) -> Result<Config, failure::Error> {
                 exec_spec: exec_spec,
                 wants: service
                     .wants
+                    .iter()
+                    .map(|s| UnitName(s.to_owned()))
+                    .collect(),
+                after: service
+                    .after
                     .iter()
                     .map(|s| UnitName(s.to_owned()))
                     .collect(),
@@ -468,7 +483,8 @@ fd -t f {extension_str} | entr {exec}
                 name: name,
                 description: UnitDescription(watch.description),
                 exec_spec: exec_spec,
-                wants: Vec::new(),
+                wants: watch.wants.iter().map(|s| UnitName(s.to_owned())).collect(),
+                after: watch.after.iter().map(|s| UnitName(s.to_owned())).collect(),
                 typ: UnitType::Watch,
             },
         );
