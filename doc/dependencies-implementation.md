@@ -12,7 +12,7 @@ Requirements on the implementation:
 <sup>*</sup> This needs precise definition at some point. We want to give a
 helpful error message in case a user accidentally ends up in this case. We also
 want to detect cycles before we start actual execution. Maybe we can allow
-cyclical `wants`, but not `after`?
+cyclical `wants_started`, but not `wants_finished`?
 
 ## Topological sort
 
@@ -28,11 +28,11 @@ exec = ...
 
 [commands.b]
 exec = ...
-after = ["a"]
+wants-finished = ["a"]
 
 [commands.c]
 exec = ...
-after = ["a"]
+wants-finished = ["a"]
 ```
 
 Or in graph form (arrow means after):
