@@ -12,6 +12,11 @@ description = "Run `cargo build` on file change"
 exec = ["cargo", "build"]
 file-types = ["rs"]
 
+[watches.lint]
+description = "Run `cargo clippy on file change"
+exec = ["cargo", "clippy"]
+file-types = ["rs"]
+
 [services.db]
 description = "Run Postgres"
 exec = ["postgres"]
