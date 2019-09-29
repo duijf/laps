@@ -155,6 +155,9 @@ fn main() -> Result<(), failure::Error> {
     );
 
     let exec_plan: Plan = get_exec_plan(&user_specified_units, &validated_config)?;
+    let new_exec_plan: NewPlan = get_new_exec_plan(user_specified_units, &validated_config)?;
+
+    println!("{:?}", new_exec_plan);
 
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
@@ -254,6 +257,53 @@ fn main() -> Result<(), failure::Error> {
 
 type Plan = Vec<Step>;
 type Step = Vec<Unit>;
+
+#[derive(Debug)]
+struct NewPlan {
+    roots: Vec<UnitName>,
+    units: HashSet<UnitName>,
+    exec_after_start: HashMap<UnitName, UnitName>,
+    exec_after_finish: HashMap<UnitName, UnitName>,
+}
+
+fn get_new_exec_plan(
+    user_unit_names: HashSet<UnitName>,
+    config: &Config,
+) -> Result<NewPlan, failure::Error> {
+    let mut roots = Vec::new();
+    let mut units = HashSet::new();
+    let mut exec_after_start = HashMap::new();
+    let mut exec_after_finish = HashMap::new();
+
+    // BFS over the config and flip all dependencies to this exec plan.
+    // If a unit has no dependencies, it is a root. This allows us to have
+    // a starting point for executing the plan.
+    let mut stack: Vec<UnitName> = user_unit_names.iter().cloned().collect();
+    while let Some(unit) = stack.pop() {
+        units.insert(unit.clone());
+        let mut deps = 0;
+        for dep in &config.units.get(&unit).unwrap().wants {
+            stack.push(dep.clone());
+            exec_after_start.insert(dep.clone(), unit.clone());
+            deps += 1;
+        }
+        for dep in &config.units.get(&unit).unwrap().after {
+            stack.push(dep.clone());
+            exec_after_finish.insert(dep.clone(), unit.clone());
+            deps += 1;
+        }
+        if deps == 0 {
+            roots.push(unit);
+        }
+    }
+
+    Ok(NewPlan {
+        roots: roots,
+        units: units,
+        exec_after_start: exec_after_start,
+        exec_after_finish: exec_after_finish,
+    })
+}
 
 // TODO: The type here needs to change to some graph like structure that we can
 // actively traverse. Otherwise, we can never start units at the earliest moment
