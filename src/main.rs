@@ -149,7 +149,7 @@ fn main() -> Result<(), failure::Error> {
         .map(|a| UnitName(a.trim().to_string()))
         .collect();
 
-    if user_specified_units.len() == 0 {
+    if user_specified_units.is_empty() {
         let help_text = get_help_text(validated_config);
         print!("{}", help_text);
         return Ok(());
@@ -160,7 +160,7 @@ fn main() -> Result<(), failure::Error> {
         .cloned()
         .collect();
     failure::ensure!(
-        unknown_targets.len() == 0,
+        unknown_targets.is_empty(),
         LapsError::UnknownTargets(unknown_targets)
     );
 
@@ -306,10 +306,7 @@ fn get_new_exec_plan(
         }
     }
 
-    Ok(NewPlan {
-        roots: roots,
-        units: units,
-    })
+    Ok(NewPlan { roots, units })
 }
 
 // TODO: The type here needs to change to some graph like structure that we can
@@ -347,11 +344,11 @@ fn get_help_text(config: Config) -> String {
 
 fn run_exec_script(
     name: &UnitName,
-    script_contents: &String,
+    script_contents: &str,
     env: &HashMap<String, String>,
     temp_dir_base: &PathBuf,
 ) -> Result<Child, failure::Error> {
-    let script_path: PathBuf = temp_dir_base.join(format!("{}", name.0));
+    let script_path: PathBuf = temp_dir_base.join(name.0.to_string());
 
     let perms = Permissions::from_mode(0o700);
     let mut file = File::create(&script_path)?;
@@ -364,6 +361,7 @@ fn run_exec_script(
     Ok(child)
 }
 
+#[allow(clippy::ptr_arg)] // Was too much effort to fix. Might revisit
 fn run_exec(
     command: &CommandName,
     args: &CommandArgs,
@@ -418,7 +416,7 @@ fn get_exec_spec(
 
     if exec.is_some() {
         let exec: Vec<String> = exec.unwrap();
-        failure::ensure!(exec.len() >= 1, LapsError::ExecCantBeEmpty);
+        failure::ensure!(!exec.is_empty(), LapsError::ExecCantBeEmpty);
 
         let command_name = CommandName(exec[0].to_owned());
         let command_args = exec[1..].to_vec(); // Potentially crashes.
@@ -437,7 +435,7 @@ fn get_exec_spec(
 }
 
 fn evaluate_arg(input: String) -> ArgOrLookup {
-    if !input.starts_with("$") {
+    if !input.starts_with('$') {
         return ArgOrLookup::Arg(input);
     };
 
@@ -455,7 +453,9 @@ fn arg_to_string(
     match arg_or_lookup {
         ArgOrLookup::Arg(s) => Ok(s),
         ArgOrLookup::Lookup(s) => {
-            let val = exec_env.get(&s).ok_or(LapsError::BadLookup(s.clone()))?;
+            let val = exec_env
+                .get(&s)
+                .ok_or_else(|| LapsError::BadLookup(s.clone()))?;
             Ok(val.to_string())
         }
     }
@@ -475,9 +475,9 @@ fn validate_config(toml_config: TomlConfig) -> Result<Config, failure::Error> {
         let prev = units.insert(
             name.clone(),
             Unit {
-                name: name,
+                name,
                 description: UnitDescription(command.description),
-                exec_spec: exec_spec,
+                exec_spec,
                 wants_started: command
                     .wants_started
                     .iter()
@@ -502,9 +502,9 @@ fn validate_config(toml_config: TomlConfig) -> Result<Config, failure::Error> {
         let prev = units.insert(
             name.clone(),
             Unit {
-                name: name,
+                name,
                 description: UnitDescription(service.description),
-                exec_spec: exec_spec,
+                exec_spec,
                 wants_started: service
                     .wants_started
                     .iter()
@@ -541,9 +541,9 @@ fd -t f {extension_str} | entr {exec}
         let prev = units.insert(
             name.clone(),
             Unit {
-                name: name,
+                name,
                 description: UnitDescription(watch.description),
-                exec_spec: exec_spec,
+                exec_spec,
                 wants_started: watch
                     .wants_started
                     .iter()
@@ -564,7 +564,7 @@ fd -t f {extension_str} | entr {exec}
 
     let config = Config {
         environment: exec_env,
-        units: units,
+        units,
     };
 
     let config = ensure_deps_exist(config)?;
