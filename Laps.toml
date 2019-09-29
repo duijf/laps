@@ -15,7 +15,7 @@ file-types = ["rs"]
 [services.db]
 description = "Run Postgres"
 exec = ["postgres"]
-wants = ["db-setup"]
+wants-finished = ["db-setup"]
 
 [commands.db-setup]
 description = "Create development DB"

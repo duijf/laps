@@ -2,6 +2,7 @@ use failure;
 use nix::unistd::Pid;
 use rand;
 use serde;
+use std::collections::VecDeque;
 use std::collections::{HashMap, HashSet};
 use std::fs::{remove_dir_all, DirBuilder, File, Permissions};
 use std::io::Read;
@@ -21,9 +22,9 @@ struct TomlCommand {
     exec: Option<Vec<String>>,
     exec_script: Option<String>,
     #[serde(default)]
-    wants: Vec<String>,
+    wants_started: Vec<String>,
     #[serde(default)]
-    after: Vec<String>,
+    wants_finished: Vec<String>,
 }
 
 #[derive(Debug, serde::Deserialize, Clone)]
@@ -33,9 +34,9 @@ struct TomlService {
     exec: Option<Vec<String>>,
     exec_script: Option<String>,
     #[serde(default)]
-    wants: Vec<String>,
+    wants_started: Vec<String>,
     #[serde(default)]
-    after: Vec<String>,
+    wants_finished: Vec<String>,
 }
 
 #[derive(Debug, serde::Deserialize, Clone)]
@@ -46,9 +47,9 @@ struct TomlWatch {
     #[serde(default)]
     file_types: Vec<String>,
     #[serde(default)]
-    wants: Vec<String>,
+    wants_started: Vec<String>,
     #[serde(default)]
-    after: Vec<String>,
+    wants_finished: Vec<String>,
 }
 
 #[derive(Debug, serde::Deserialize, Clone)]
@@ -82,8 +83,10 @@ struct Unit {
     name: UnitName,
     description: UnitDescription,
     exec_spec: ExecSpec,
-    wants: Vec<UnitName>,
-    after: Vec<UnitName>,
+    wants_started: Vec<UnitName>,
+    wants_finished: Vec<UnitName>,
+    after_started: Vec<UnitName>,
+    after_finished: Vec<UnitName>,
     typ: UnitType,
 }
 
@@ -113,6 +116,12 @@ struct Config {
     environment: HashMap<String, String>,
 }
 
+impl Config {
+    fn get_unit_names(&self) -> HashSet<UnitName> {
+        self.units.keys().cloned().collect()
+    }
+}
+
 #[derive(Debug, failure::Fail)]
 enum LapsError {
     #[fail(display = "Watches, services, commands can only have one of `exec`, `exec-script`")]
@@ -132,6 +141,7 @@ enum LapsError {
 fn main() -> Result<(), failure::Error> {
     let toml_config: TomlConfig = read_toml_config()?;
     let validated_config: Config = validate_config(toml_config)?;
+    dbg!(&validated_config);
 
     let available_units: HashSet<UnitName> = validated_config.units.keys().cloned().collect();
     let user_specified_units: HashSet<UnitName> = std::env::args()
@@ -262,8 +272,6 @@ type Step = Vec<Unit>;
 struct NewPlan {
     roots: Vec<UnitName>,
     units: HashSet<UnitName>,
-    exec_after_start: HashMap<UnitName, UnitName>,
-    exec_after_finish: HashMap<UnitName, UnitName>,
 }
 
 fn get_new_exec_plan(
@@ -272,24 +280,25 @@ fn get_new_exec_plan(
 ) -> Result<NewPlan, failure::Error> {
     let mut roots = Vec::new();
     let mut units = HashSet::new();
-    let mut exec_after_start = HashMap::new();
-    let mut exec_after_finish = HashMap::new();
 
-    // BFS over the config and flip all dependencies to this exec plan.
-    // If a unit has no dependencies, it is a root. This allows us to have
-    // a starting point for executing the plan.
-    let mut stack: Vec<UnitName> = user_unit_names.iter().cloned().collect();
-    while let Some(unit) = stack.pop() {
+    // BFS over the config to find a whitelist of all units required for
+    // what the user wanted, as well as a set of roots to start executing
+    // from. If a unit has no dependencies and it's reachable through the
+    // dependency graph of the units the user wants executed, it is a root.
+    let mut queue: VecDeque<UnitName> = user_unit_names.into_iter().collect();
+    while let Some(unit) = queue.pop_back() {
         units.insert(unit.clone());
         let mut deps = 0;
-        for dep in &config.units.get(&unit).unwrap().wants {
-            stack.push(dep.clone());
-            exec_after_start.insert(dep.clone(), unit.clone());
+        for dep in &config.units.get(&unit).unwrap().wants_started {
+            if !units.contains(&dep) {
+                queue.push_front(dep.clone());
+            }
             deps += 1;
         }
-        for dep in &config.units.get(&unit).unwrap().after {
-            stack.push(dep.clone());
-            exec_after_finish.insert(dep.clone(), unit.clone());
+        for dep in &config.units.get(&unit).unwrap().wants_finished {
+            if !units.contains(&dep) {
+                queue.push_front(dep.clone());
+            }
             deps += 1;
         }
         if deps == 0 {
@@ -300,8 +309,6 @@ fn get_new_exec_plan(
     Ok(NewPlan {
         roots: roots,
         units: units,
-        exec_after_start: exec_after_start,
-        exec_after_finish: exec_after_finish,
     })
 }
 
@@ -471,16 +478,18 @@ fn validate_config(toml_config: TomlConfig) -> Result<Config, failure::Error> {
                 name: name,
                 description: UnitDescription(command.description),
                 exec_spec: exec_spec,
-                wants: command
-                    .wants
+                wants_started: command
+                    .wants_started
                     .iter()
                     .map(|s| UnitName(s.to_owned()))
                     .collect(),
-                after: command
-                    .after
+                wants_finished: command
+                    .wants_finished
                     .iter()
                     .map(|s| UnitName(s.to_owned()))
                     .collect(),
+                after_started: Vec::new(),
+                after_finished: Vec::new(),
                 typ: UnitType::Command,
             },
         );
@@ -496,16 +505,18 @@ fn validate_config(toml_config: TomlConfig) -> Result<Config, failure::Error> {
                 name: name,
                 description: UnitDescription(service.description),
                 exec_spec: exec_spec,
-                wants: service
-                    .wants
+                wants_started: service
+                    .wants_started
                     .iter()
                     .map(|s| UnitName(s.to_owned()))
                     .collect(),
-                after: service
-                    .after
+                wants_finished: service
+                    .wants_finished
                     .iter()
                     .map(|s| UnitName(s.to_owned()))
                     .collect(),
+                after_started: Vec::new(),
+                after_finished: Vec::new(),
                 typ: UnitType::Service,
             },
         );
@@ -533,8 +544,18 @@ fd -t f {extension_str} | entr {exec}
                 name: name,
                 description: UnitDescription(watch.description),
                 exec_spec: exec_spec,
-                wants: watch.wants.iter().map(|s| UnitName(s.to_owned())).collect(),
-                after: watch.after.iter().map(|s| UnitName(s.to_owned())).collect(),
+                wants_started: watch
+                    .wants_started
+                    .iter()
+                    .map(|s| UnitName(s.to_owned()))
+                    .collect(),
+                wants_finished: watch
+                    .wants_finished
+                    .iter()
+                    .map(|s| UnitName(s.to_owned()))
+                    .collect(),
+                after_started: Vec::new(),
+                after_finished: Vec::new(),
                 typ: UnitType::Watch,
             },
         );
@@ -547,18 +568,61 @@ fd -t f {extension_str} | entr {exec}
     };
 
     let config = ensure_deps_exist(config)?;
+    let config = add_reverse_deps(config)?;
 
     Ok(config)
 }
 
 fn ensure_deps_exist(config: Config) -> Result<Config, failure::Error> {
     for (name, unit) in &config.units {
-        for dep in &unit.wants {
+        for dep in unit.wants_started.iter().chain(&unit.wants_finished) {
             failure::ensure!(
                 config.units.contains_key(&dep),
                 LapsError::UnknownDeps(name.clone(), dep.clone())
             )
         }
+    }
+
+    Ok(config)
+}
+
+fn add_reverse_deps(mut config: Config) -> Result<Config, failure::Error> {
+    dbg!(&config);
+
+    let mut after_started: HashMap<UnitName, Vec<UnitName>> = config
+        .get_unit_names()
+        .into_iter()
+        .map(|u| (u, Vec::new()))
+        .collect();
+    let mut after_finished: HashMap<UnitName, Vec<UnitName>> = after_started.clone();
+
+    for (name, unit) in &config.units {
+        for dep in unit.wants_started.iter() {
+            after_started.get_mut(dep).unwrap().push(name.clone());
+        }
+        for dep in unit.wants_finished.iter() {
+            after_finished.get_mut(dep).unwrap().push(name.clone());
+        }
+    }
+
+    dbg!(&after_finished);
+    dbg!(&after_started);
+
+    for (name, mut units) in after_started {
+        config
+            .units
+            .get_mut(&name)
+            .unwrap()
+            .after_started
+            .append(&mut units);
+    }
+    for (name, mut units) in after_finished {
+        config
+            .units
+            .get_mut(&name)
+            .unwrap()
+            .after_finished
+            .append(&mut units);
     }
 
     Ok(config)
