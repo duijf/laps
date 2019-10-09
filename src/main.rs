@@ -213,6 +213,7 @@ fn main() -> Result<(), failure::Error> {
     // case, we detect the signal and clean up at the end of this step.
     let mut units_finished: usize = 0;
     while units_finished < num_children && running.load(Ordering::SeqCst) {
+        units_finished = 0;
         let finished_children: HashSet<UnitName> = children
             .iter()
             .filter(|(_u, s)| s.is_finished())
@@ -269,31 +270,29 @@ fn main() -> Result<(), failure::Error> {
     }
 
     // Termination. Kill all children and exit.
-    if !running.load(Ordering::SeqCst) {
-        for (_unit_name, status) in children.iter_mut() {
-            match status {
-                UnitStatus::Inactive => {}
-                UnitStatus::Running(child, pid) => {
-                    match child.try_wait() {
-                        Ok(Some(_exit_code)) => continue, // Child has been terminated after all.
-                        Ok(None) => {
-                            // Find the process group ID, kill it, wait for results. This ensures
-                            // that there are never any processes left running when we terminate
-                            // laps.
-                            let child_pgid = nix::unistd::getpgid(Some(*pid)).unwrap();
-                            nix::sys::signal::kill(child_pgid, nix::sys::signal::Signal::SIGTERM)
-                                .unwrap();
+    for (_unit_name, status) in children.iter_mut() {
+        match status {
+            UnitStatus::Inactive => {}
+            UnitStatus::Running(child, pid) => {
+                match child.try_wait() {
+                    Ok(Some(_exit_code)) => continue, // Child has been terminated after all.
+                    Ok(None) => {
+                        // Find the process group ID, kill it, wait for results. This ensures
+                        // that there are never any processes left running when we terminate
+                        // laps.
+                        let child_pgid = nix::unistd::getpgid(Some(*pid)).unwrap();
+                        nix::sys::signal::kill(child_pgid, nix::sys::signal::Signal::SIGTERM)
+                            .unwrap();
 
-                            nix::sys::wait::waitpid(child_pgid, None).unwrap();
-                        }
-                        Err(_) => {
-                            // TODO: What should happen here?
-                            continue;
-                        }
+                        nix::sys::wait::waitpid(child_pgid, None).unwrap();
+                    }
+                    Err(_) => {
+                        // TODO: What should happen here?
+                        continue;
                     }
                 }
-                UnitStatus::Finished(_exit_status) => {}
             }
+            UnitStatus::Finished(_exit_status) => {}
         }
     }
 
