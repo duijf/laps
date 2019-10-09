@@ -159,7 +159,6 @@ enum LapsError {
 fn main() -> Result<(), failure::Error> {
     let toml_config: TomlConfig = read_toml_config()?;
     let validated_config: Config = validate_config(toml_config)?;
-    dbg!(&validated_config);
 
     let available_units: HashSet<UnitName> = validated_config.units.keys().cloned().collect();
     let user_specified_units: HashSet<UnitName> = std::env::args()
@@ -183,8 +182,6 @@ fn main() -> Result<(), failure::Error> {
     );
 
     let exec_plan: NewPlan = get_new_exec_plan(user_specified_units, &validated_config)?;
-
-    let exec_plan = dbg!(exec_plan);
 
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
@@ -629,8 +626,6 @@ fn ensure_deps_exist(config: Config) -> Result<Config, failure::Error> {
 }
 
 fn add_reverse_deps(mut config: Config) -> Result<Config, failure::Error> {
-    dbg!(&config);
-
     let mut after_started: HashMap<UnitName, Vec<UnitName>> = config
         .get_unit_names()
         .into_iter()
@@ -646,9 +641,6 @@ fn add_reverse_deps(mut config: Config) -> Result<Config, failure::Error> {
             after_finished.get_mut(dep).unwrap().push(name.clone());
         }
     }
-
-    dbg!(&after_finished);
-    dbg!(&after_started);
 
     for (name, mut units) in after_started {
         config
