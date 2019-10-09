@@ -98,6 +98,7 @@ enum UnitType {
 }
 
 // TODO: We cannot clone this, so we cannot put it in `Unit`.
+#[derive(Debug)]
 enum UnitStatus {
     Inactive,
     Running(Child, Pid),
@@ -164,10 +165,9 @@ fn main() -> Result<(), failure::Error> {
         LapsError::UnknownTargets(unknown_targets)
     );
 
-    let exec_plan: Plan = get_exec_plan(&user_specified_units, &validated_config)?;
-    let new_exec_plan: NewPlan = get_new_exec_plan(user_specified_units, &validated_config)?;
+    let exec_plan: NewPlan = get_new_exec_plan(user_specified_units, &validated_config)?;
 
-    println!("{:?}", new_exec_plan);
+    let exec_plan = dbg!(exec_plan);
 
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
@@ -185,77 +185,80 @@ fn main() -> Result<(), failure::Error> {
     DirBuilder::new().recursive(true).create(&temp_dir_base)?;
     std::fs::set_permissions(&temp_dir_base, Permissions::from_mode(0o700))?;
 
-    for step in exec_plan {
-        let mut children: Vec<(&UnitName, bool, Child)> = Vec::new();
+    let mut children: HashMap<UnitName, UnitStatus> = HashMap::new();
+    for unit_name in exec_plan.units {
+        children.insert(unit_name.clone(), UnitStatus::Inactive);
+    }
+    let num_children = children.len();
 
-        for unit in &step {
-            children.push((
-                &unit.name,
-                true,
-                match &unit.exec_spec {
-                    ExecSpec::Exec(command, args) => {
-                        run_exec(command, args, &validated_config.environment)?
+    // Wait on children to terminate by themselves so we can continue in the plan.
+    // This loop is also exited when the user sent a termination signal. In that
+    // case, we detect the signal and clean up at the end of this step.
+    let mut units_finished: usize = 0;
+    while units_finished < num_children && running.load(Ordering::SeqCst) {
+        for (unit_name, unit_status) in children.iter_mut() {
+            match unit_status {
+                UnitStatus::Inactive => {
+                    if exec_plan.roots.contains(&unit_name) {
+                        let unit = validated_config.units.get(&unit_name).unwrap();
+                        match &unit.exec_spec {
+                            ExecSpec::Exec(command, args) => {
+                                let child =
+                                    run_exec(&command, &args, &validated_config.environment)?;
+                                let child_pid: Pid = Pid::from_raw(child.id() as i32);
+                                *unit_status = UnitStatus::Running(child, child_pid);
+                            }
+                            ExecSpec::ExecScript(script_content) => {
+                                let child = run_exec_script(
+                                    &unit.name,
+                                    &script_content,
+                                    &validated_config.environment,
+                                    &temp_dir_base,
+                                )?;
+                                let child_pid: Pid = Pid::from_raw(child.id() as i32);
+                                *unit_status = UnitStatus::Running(child, child_pid);
+                            }
+                        }
                     }
-                    ExecSpec::ExecScript(script_content) => run_exec_script(
-                        &unit.name,
-                        script_content,
-                        &validated_config.environment,
-                        &temp_dir_base,
-                    )?,
-                },
-            ));
-        }
-
-        // Wait on children to terminate by themselves so we can continue in the plan.
-        // This loop is also exited when the user sent a termination signal. In that
-        // case, we detect the signal and clean up at the end of this step.
-        let mut running_children = children.len();
-        while running.load(Ordering::SeqCst) {
-            if running_children == 0 {
-                break;
+                }
+                UnitStatus::Running(child, _pid) => {
+                    if let Some(exit_code) = child.try_wait()? {
+                        *unit_status = UnitStatus::Finished(exit_code);
+                    }
+                }
+                UnitStatus::Finished(_exit_status) => {
+                    units_finished += 1;
+                }
             }
-
-            for (_unit_name, child_running, child) in children.iter_mut() {
-                if !*child_running {
-                    continue;
-                }
-
-                if let Some(_exit_code) = child.try_wait()? {
-                    // TODO: Report ungraceful exit in some way?
-
-                    *child_running = false;
-                    running_children -= 1;
-                }
-            }
-
-            std::thread::sleep(std::time::Duration::from_millis(200));
         }
+        std::thread::sleep(std::time::Duration::from_millis(200));
+    }
 
-        // Termination. Kill all children and exit.
-        if !running.load(Ordering::SeqCst) {
-            for (_unit_name, child_running, child) in children.iter_mut() {
-                if !*child_running {
-                    continue;
-                }
+    // Termination. Kill all children and exit.
+    if !running.load(Ordering::SeqCst) {
+        for (_unit_name, status) in children.iter_mut() {
+            match status {
+                UnitStatus::Inactive => {}
+                UnitStatus::Running(child, pid) => {
+                    match child.try_wait() {
+                        Ok(Some(_exit_code)) => continue, // Child has been terminated after all.
+                        Ok(None) => {
+                            // Find the process group ID, kill it, wait for results. This ensures
+                            // that there are never any processes left running when we terminate
+                            // laps.
+                            let child_pgid = nix::unistd::getpgid(Some(*pid)).unwrap();
+                            nix::sys::signal::kill(child_pgid, nix::sys::signal::Signal::SIGTERM)
+                                .unwrap();
 
-                match child.try_wait() {
-                    Ok(Some(_exit_code)) => continue, // Child has been terminated after all.
-                    Ok(None) => {
-                        // Find the process group ID, kill it, wait for results. This ensures
-                        // that there are never any processes left running when we terminate
-                        // laps.
-                        let child_pid: Pid = Pid::from_raw(child.id() as i32);
-                        let child_pgid = nix::unistd::getpgid(Some(child_pid)).unwrap();
-                        nix::sys::signal::kill(child_pgid, nix::sys::signal::Signal::SIGTERM)
-                            .unwrap();
-
-                        nix::sys::wait::waitpid(child_pgid, None).unwrap();
+                            nix::sys::wait::waitpid(child_pgid, None).unwrap();
+                        }
+                        Err(_) => {
+                            // TODO: What should happen here?
+                            continue;
+                        }
                     }
-                    Err(_) => {
-                        // TODO: What should happen here?
-                        continue;
-                    }
                 }
+                UnitStatus::Finished(_exit_status) => {}
             }
         }
     }
@@ -264,9 +267,6 @@ fn main() -> Result<(), failure::Error> {
 
     Ok(())
 }
-
-type Plan = Vec<Step>;
-type Step = Vec<Unit>;
 
 #[derive(Debug)]
 struct NewPlan {
@@ -307,20 +307,6 @@ fn get_new_exec_plan(
     }
 
     Ok(NewPlan { roots, units })
-}
-
-// TODO: The type here needs to change to some graph like structure that we can
-// actively traverse. Otherwise, we can never start units at the earliest moment
-// in time possible.
-fn get_exec_plan(
-    user_unit_names: &HashSet<UnitName>,
-    config: &Config,
-) -> Result<Plan, failure::Error> {
-    let mut step = Vec::new();
-    for unit_name in user_unit_names {
-        step.push(config.units.get(unit_name).unwrap().clone());
-    }
-    Ok(vec![step])
 }
 
 fn get_help_text(config: Config) -> String {
@@ -414,8 +400,7 @@ fn get_exec_spec(
         LapsError::BadExec(name.to_owned())
     );
 
-    if exec.is_some() {
-        let exec: Vec<String> = exec.unwrap();
+    if let Some(exec) = exec {
         failure::ensure!(!exec.is_empty(), LapsError::ExecCantBeEmpty);
 
         let command_name = CommandName(exec[0].to_owned());
@@ -427,8 +412,8 @@ fn get_exec_spec(
 
         return Ok(ExecSpec::Exec(command_name, command_args));
     }
-    if exec_script.is_some() {
-        return Ok(ExecSpec::ExecScript(exec_script.unwrap()));
+    if let Some(exec_script) = exec_script {
+        return Ok(ExecSpec::ExecScript(exec_script));
     }
 
     failure::bail!(LapsError::BadExec(name.to_owned()))
