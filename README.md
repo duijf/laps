@@ -4,8 +4,6 @@ Laps is a project automation tool. Status: pre-alpha.
 
 ## Ideas
 
-Plan the execution of services and dependencies.
-
 A display thing for error messages. Include more meta-data for the current
 error enum. Don't return boxed errors.
 
@@ -45,6 +43,8 @@ process groups for sending signals to multiple PIDs.
 Signal handling. Wait for child termination before exiting.
 
 Clean up temp files on termination.
+
+Plan the execution of services and dependencies.
 
 ## Inspiration
 
