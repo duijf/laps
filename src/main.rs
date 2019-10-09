@@ -105,6 +105,23 @@ enum UnitStatus {
     Finished(ExitStatus),
 }
 
+impl UnitStatus {
+    fn is_finished(&self) -> bool {
+        match self {
+            UnitStatus::Inactive => false,
+            UnitStatus::Running(_, _) => false,
+            UnitStatus::Finished(_) => true,
+        }
+    }
+    fn is_running(&self) -> bool {
+        match self {
+            UnitStatus::Inactive => false,
+            UnitStatus::Running(_, _) => true,
+            UnitStatus::Finished(_) => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 enum ExecSpec {
     Exec(CommandName, CommandArgs),
@@ -186,7 +203,7 @@ fn main() -> Result<(), failure::Error> {
     std::fs::set_permissions(&temp_dir_base, Permissions::from_mode(0o700))?;
 
     let mut children: HashMap<UnitName, UnitStatus> = HashMap::new();
-    for unit_name in exec_plan.units {
+    for unit_name in &exec_plan.units {
         children.insert(unit_name.clone(), UnitStatus::Inactive);
     }
     let num_children = children.len();
@@ -196,10 +213,27 @@ fn main() -> Result<(), failure::Error> {
     // case, we detect the signal and clean up at the end of this step.
     let mut units_finished: usize = 0;
     while units_finished < num_children && running.load(Ordering::SeqCst) {
+        let finished_children: HashSet<UnitName> = children
+            .iter()
+            .filter(|(_u, s)| s.is_finished())
+            .map(|(u, _s)| u)
+            .cloned()
+            .collect();
+        let running_children: HashSet<UnitName> = children
+            .iter()
+            .filter(|(_u, s)| s.is_running())
+            .map(|(u, _s)| u)
+            .cloned()
+            .collect();
         for (unit_name, unit_status) in children.iter_mut() {
             match unit_status {
                 UnitStatus::Inactive => {
-                    if exec_plan.roots.contains(&unit_name) {
+                    if is_unblocked(
+                        &validated_config.units.get(&unit_name).unwrap(),
+                        &exec_plan,
+                        &running_children,
+                        &finished_children,
+                    ) {
                         let unit = validated_config.units.get(&unit_name).unwrap();
                         match &unit.exec_spec {
                             ExecSpec::Exec(command, args) => {
@@ -556,6 +590,30 @@ fd -t f {extension_str} | entr {exec}
     let config = add_reverse_deps(config)?;
 
     Ok(config)
+}
+
+fn is_unblocked(
+    unit: &Unit,
+    exec_plan: &NewPlan,
+    running_children: &HashSet<UnitName>,
+    finished_children: &HashSet<UnitName>,
+) -> bool {
+    let is_root = exec_plan.roots.contains(&unit.name);
+    let wants_started: HashSet<UnitName> = unit.wants_started.iter().cloned().collect();
+    let wants_started_in_scope: HashSet<UnitName> = wants_started
+        .intersection(&exec_plan.units)
+        .cloned()
+        .collect();
+
+    let wants_finished: HashSet<UnitName> = unit.wants_finished.iter().cloned().collect();
+    let wants_finished_in_scope: HashSet<UnitName> = wants_finished
+        .intersection(&exec_plan.units)
+        .cloned()
+        .collect();
+
+    return is_root
+        || (running_children.is_superset(&wants_started_in_scope)
+            && finished_children.is_superset(&wants_finished_in_scope));
 }
 
 fn ensure_deps_exist(config: Config) -> Result<Config, failure::Error> {
