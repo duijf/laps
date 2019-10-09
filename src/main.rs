@@ -610,9 +610,9 @@ fn is_unblocked(
         .cloned()
         .collect();
 
-    return is_root
+    is_root
         || (running_children.is_superset(&wants_started_in_scope)
-            && finished_children.is_superset(&wants_finished_in_scope));
+            && finished_children.is_superset(&wants_finished_in_scope))
 }
 
 fn ensure_deps_exist(config: Config) -> Result<Config, failure::Error> {
