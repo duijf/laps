@@ -4,6 +4,7 @@ use rand;
 use serde;
 use std::collections::VecDeque;
 use std::collections::{HashMap, HashSet};
+use std::fmt;
 use std::fs::{remove_dir_all, DirBuilder, File, Permissions};
 use std::io::Read;
 use std::io::Write;
@@ -65,8 +66,20 @@ struct TomlConfig {
 #[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord)]
 struct UnitName(String);
 
+impl fmt::Display for UnitName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "`{}`", self.0)
+    }
+}
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct UnitDescription(String);
+
+impl fmt::Display for UnitDescription {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "`{}`", self.0)
+    }
+}
 
 #[derive(Debug, Clone)]
 struct CommandName(String);
@@ -143,13 +156,15 @@ impl Config {
 
 #[derive(Debug, Error)]
 enum LapsError {
-    #[error("Watches, services, commands can only have one of `exec`, `exec-script`")]
-    BadExec(UnitName),
-    #[error("Exec stanza cannot be empty")]
-    ExecCantBeEmpty,
-    #[error("Duplicate names somewhere")]
-    Duplicate,
-    #[error("Service has unknown dependencies")]
+    #[error("Specification has both `exec` and `exec-script`.")]
+    BothExecAndExecScript,
+    #[error("Specification is missing one of `exec`, `exec-script`.")]
+    MissingExec,
+    #[error("`exec` is an empty list")]
+    ExecIsEmptyList,
+    #[error("Duplicate definitions for {0}")]
+    Duplicate(UnitName),
+    #[error("Unit {0} has an unknown dependency {1}")]
     UnknownDeps(UnitName, UnitName),
     #[error("Unknown targets specified")]
     UnknownTargets(HashSet<UnitName>),
@@ -158,8 +173,12 @@ enum LapsError {
 }
 
 fn main() -> Result<()> {
-    let toml_config: TomlConfig = read_toml_config()?;
-    let validated_config: Config = validate_config(toml_config)?;
+    let config_path = "Laps.toml";
+
+    let toml_config: TomlConfig = read_toml_config(config_path)
+        .with_context(|| format!("Could not read configuration from {}", config_path))?;
+    let validated_config: Config = validate_config(toml_config)
+        .with_context(|| format!("Invalid configuration in {}", config_path))?;
 
     let available_units: HashSet<UnitName> = validated_config.units.keys().cloned().collect();
     let user_specified_units: HashSet<UnitName> = std::env::args()
@@ -409,30 +428,32 @@ fn run_exec(
     Ok(child)
 }
 
-fn read_toml_config() -> Result<TomlConfig> {
-    let mut file = std::fs::File::open("Laps.toml")?;
+fn read_toml_config(config_path: &str) -> Result<TomlConfig> {
+    let mut file = std::fs::File::open(config_path)
+        .with_context(|| format!("Could not open {}", config_path))?;
+
     let mut content = String::new();
-    file.read_to_string(&mut content)?;
-    let config: TomlConfig = toml::from_str(&content)?;
+    file.read_to_string(&mut content)
+        .with_context(|| format!("Could not read from {}", config_path))?;
+
+    let config: TomlConfig = toml::from_str(&content)
+        .with_context(|| format!("Could not deserialize {}", config_path))?;
+
     Ok(config)
 }
 
-fn get_exec_spec(
-    name: &UnitName,
-    exec: Option<Vec<String>>,
-    exec_script: Option<String>,
-) -> Result<ExecSpec> {
+fn get_exec_spec(exec: Option<Vec<String>>, exec_script: Option<String>) -> Result<ExecSpec> {
     anyhow::ensure!(
         // Check exec and exec_script are set mututually exclusively.
         exec.is_none() != exec_script.is_none(),
-        LapsError::BadExec(name.to_owned())
+        LapsError::BothExecAndExecScript
     );
 
     if let Some(exec) = exec {
-        anyhow::ensure!(!exec.is_empty(), LapsError::ExecCantBeEmpty);
+        anyhow::ensure!(!exec.is_empty(), LapsError::ExecIsEmptyList);
 
         let command_name = CommandName(exec[0].to_owned());
-        let command_args = exec[1..].to_vec(); // Potentially crashes.
+        let command_args = exec[1..].to_vec();
         let command_args = command_args
             .iter()
             .map(|a| evaluate_arg(a.to_owned()))
@@ -444,7 +465,27 @@ fn get_exec_spec(
         return Ok(ExecSpec::ExecScript(exec_script));
     }
 
-    anyhow::bail!(LapsError::BadExec(name.to_owned()))
+    anyhow::bail!(LapsError::MissingExec)
+}
+
+fn get_watch_exec_spec(watch: &TomlWatch) -> Result<ExecSpec> {
+    anyhow::ensure!(!watch.exec.is_empty(), LapsError::ExecIsEmptyList);
+
+    // Ugly: a watch is a bash script calling `fd` and `entr`
+    let exec_spec = ExecSpec::ExecScript(format!(
+        "#!/bin/bash
+fd -t f {extension_str} | entr {exec}
+",
+        extension_str = watch
+            .file_types
+            .iter()
+            .map(|e| format!("-e {}", e))
+            .collect::<Vec<String>>()
+            .join(" "),
+        exec = watch.exec.join(" ")
+    ));
+
+    Ok(exec_spec)
 }
 
 fn evaluate_arg(input: String) -> ArgOrLookup {
@@ -481,7 +522,8 @@ fn validate_config(toml_config: TomlConfig) -> Result<Config> {
 
     for (name, command) in toml_config.commands {
         let name: UnitName = UnitName(name);
-        let exec_spec: ExecSpec = get_exec_spec(&name, command.exec, command.exec_script)?;
+        let exec_spec: ExecSpec = get_exec_spec(command.exec, command.exec_script)
+            .with_context(|| format!("Invalid execution specification for command {}", name))?;
         let prev = units.insert(
             name.clone(),
             Unit {
@@ -503,12 +545,15 @@ fn validate_config(toml_config: TomlConfig) -> Result<Config> {
                 typ: UnitType::Command,
             },
         );
-        anyhow::ensure!(prev.is_none(), LapsError::Duplicate)
+        if let Some(prev) = prev {
+            anyhow::bail!(LapsError::Duplicate(prev.name))
+        }
     }
 
     for (name, service) in toml_config.services {
         let name: UnitName = UnitName(name);
-        let exec_spec: ExecSpec = get_exec_spec(&name, service.exec, service.exec_script)?;
+        let exec_spec: ExecSpec = get_exec_spec(service.exec, service.exec_script)
+            .with_context(|| format!("Invalid execution specification for service {}", name))?;
         let prev = units.insert(
             name.clone(),
             Unit {
@@ -530,24 +575,15 @@ fn validate_config(toml_config: TomlConfig) -> Result<Config> {
                 typ: UnitType::Service,
             },
         );
-        anyhow::ensure!(prev.is_none(), LapsError::Duplicate)
+        if let Some(prev) = prev {
+            anyhow::bail!(LapsError::Duplicate(prev.name))
+        }
     }
 
     for (name, watch) in toml_config.watches {
         let name: UnitName = UnitName(name);
-        // Ugly: a watch is a bash script calling `fd` and `entr`
-        let exec_spec: ExecSpec = ExecSpec::ExecScript(format!(
-            "#!/bin/bash
-fd -t f {extension_str} | entr {exec}
-",
-            extension_str = watch
-                .file_types
-                .iter()
-                .map(|e| format!("-e {}", e))
-                .collect::<Vec<String>>()
-                .join(" "),
-            exec = watch.exec.join(" ")
-        ));
+        let exec_spec = get_watch_exec_spec(&watch)
+            .with_context(|| format!("Invalid execution specification for watch {}", name))?;
         let prev = units.insert(
             name.clone(),
             Unit {
@@ -569,7 +605,9 @@ fd -t f {extension_str} | entr {exec}
                 typ: UnitType::Watch,
             },
         );
-        anyhow::ensure!(prev.is_none(), LapsError::Duplicate)
+        if let Some(prev) = prev {
+            anyhow::bail!(LapsError::Duplicate(prev.name))
+        }
     }
 
     let config = Config {
@@ -577,8 +615,8 @@ fd -t f {extension_str} | entr {exec}
         units,
     };
 
-    let config = ensure_deps_exist(config)?;
-    let config = add_reverse_deps(config)?;
+    let config = ensure_deps_exist(config).context("Invalid dependencies")?;
+    let config = add_reverse_deps(config);
 
     Ok(config)
 }
@@ -620,7 +658,7 @@ fn ensure_deps_exist(config: Config) -> Result<Config> {
     Ok(config)
 }
 
-fn add_reverse_deps(mut config: Config) -> Result<Config> {
+fn add_reverse_deps(mut config: Config) -> Config {
     let mut after_started: HashMap<UnitName, Vec<UnitName>> = config
         .get_unit_names()
         .into_iter()
@@ -654,5 +692,5 @@ fn add_reverse_deps(mut config: Config) -> Result<Config> {
             .append(&mut units);
     }
 
-    Ok(config)
+    config
 }
