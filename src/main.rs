@@ -1,4 +1,4 @@
-use failure;
+use anyhow::{Context, Result};
 use nix::unistd::Pid;
 use rand;
 use serde;
@@ -13,6 +13,7 @@ use std::path::PathBuf;
 use std::process::{Child, Command, ExitStatus};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use thiserror::Error;
 use toml;
 
 #[derive(Debug, serde::Deserialize, Clone)]
@@ -140,23 +141,23 @@ impl Config {
     }
 }
 
-#[derive(Debug, failure::Fail)]
+#[derive(Debug, Error)]
 enum LapsError {
-    #[fail(display = "Watches, services, commands can only have one of `exec`, `exec-script`")]
+    #[error("Watches, services, commands can only have one of `exec`, `exec-script`")]
     BadExec(UnitName),
-    #[fail(display = "Exec stanza cannot be empty")]
+    #[error("Exec stanza cannot be empty")]
     ExecCantBeEmpty,
-    #[fail(display = "Duplicate names somewhere")]
+    #[error("Duplicate names somewhere")]
     Duplicate,
-    #[fail(display = "Service has unknown dependencies")]
+    #[error("Service has unknown dependencies")]
     UnknownDeps(UnitName, UnitName),
-    #[fail(display = "Unknown targets specified")]
+    #[error("Unknown targets specified")]
     UnknownTargets(HashSet<UnitName>),
-    #[fail(display = "Bad lookup {}", _0)]
+    #[error("Bad lookup {0}")]
     BadLookup(String),
 }
 
-fn main() -> Result<(), failure::Error> {
+fn main() -> Result<()> {
     let toml_config: TomlConfig = read_toml_config()?;
     let validated_config: Config = validate_config(toml_config)?;
 
@@ -176,7 +177,7 @@ fn main() -> Result<(), failure::Error> {
         .difference(&available_units)
         .cloned()
         .collect();
-    failure::ensure!(
+    anyhow::ensure!(
         unknown_targets.is_empty(),
         LapsError::UnknownTargets(unknown_targets)
     );
@@ -304,10 +305,7 @@ struct NewPlan {
     units: HashSet<UnitName>,
 }
 
-fn get_new_exec_plan(
-    user_unit_names: HashSet<UnitName>,
-    config: &Config,
-) -> Result<NewPlan, failure::Error> {
+fn get_new_exec_plan(user_unit_names: HashSet<UnitName>, config: &Config) -> Result<NewPlan> {
     let mut roots = Vec::new();
     let mut units = HashSet::new();
 
@@ -363,7 +361,7 @@ fn run_exec_script(
     script_contents: &str,
     env: &HashMap<String, String>,
     temp_dir_base: &PathBuf,
-) -> Result<Child, failure::Error> {
+) -> Result<Child> {
     let script_path: PathBuf = temp_dir_base.join(name.0.to_string());
 
     let perms = Permissions::from_mode(0o700);
@@ -382,14 +380,14 @@ fn run_exec(
     command: &CommandName,
     args: &CommandArgs,
     env: &HashMap<String, String>,
-) -> Result<Child, failure::Error> {
+) -> Result<Child> {
     let child = unsafe {
         Command::new(&command.0)
             .args(
                 &args
                     .iter()
                     .map(|a| arg_to_string(a.to_owned(), &env))
-                    .collect::<Result<Vec<String>, failure::Error>>()?,
+                    .collect::<Result<Vec<String>, anyhow::Error>>()?,
             )
             .envs(env)
             // Ensure that any children we spawn also receive SIGTERM and SIGKILL when
@@ -411,7 +409,7 @@ fn run_exec(
     Ok(child)
 }
 
-fn read_toml_config() -> Result<TomlConfig, failure::Error> {
+fn read_toml_config() -> Result<TomlConfig> {
     let mut file = std::fs::File::open("Laps.toml")?;
     let mut content = String::new();
     file.read_to_string(&mut content)?;
@@ -423,15 +421,15 @@ fn get_exec_spec(
     name: &UnitName,
     exec: Option<Vec<String>>,
     exec_script: Option<String>,
-) -> Result<ExecSpec, failure::Error> {
-    failure::ensure!(
+) -> Result<ExecSpec> {
+    anyhow::ensure!(
         // Check exec and exec_script are set mututually exclusively.
         exec.is_none() != exec_script.is_none(),
         LapsError::BadExec(name.to_owned())
     );
 
     if let Some(exec) = exec {
-        failure::ensure!(!exec.is_empty(), LapsError::ExecCantBeEmpty);
+        anyhow::ensure!(!exec.is_empty(), LapsError::ExecCantBeEmpty);
 
         let command_name = CommandName(exec[0].to_owned());
         let command_args = exec[1..].to_vec(); // Potentially crashes.
@@ -446,7 +444,7 @@ fn get_exec_spec(
         return Ok(ExecSpec::ExecScript(exec_script));
     }
 
-    failure::bail!(LapsError::BadExec(name.to_owned()))
+    anyhow::bail!(LapsError::BadExec(name.to_owned()))
 }
 
 fn evaluate_arg(input: String) -> ArgOrLookup {
@@ -461,10 +459,7 @@ fn evaluate_arg(input: String) -> ArgOrLookup {
     ArgOrLookup::Lookup(input[1..].to_string())
 }
 
-fn arg_to_string(
-    arg_or_lookup: ArgOrLookup,
-    exec_env: &HashMap<String, String>,
-) -> Result<String, failure::Error> {
+fn arg_to_string(arg_or_lookup: ArgOrLookup, exec_env: &HashMap<String, String>) -> Result<String> {
     match arg_or_lookup {
         ArgOrLookup::Arg(s) => Ok(s),
         ArgOrLookup::Lookup(s) => {
@@ -476,7 +471,7 @@ fn arg_to_string(
     }
 }
 
-fn validate_config(toml_config: TomlConfig) -> Result<Config, failure::Error> {
+fn validate_config(toml_config: TomlConfig) -> Result<Config> {
     let mut units: HashMap<UnitName, Unit> = HashMap::new();
 
     let mut exec_env = std::env::vars().collect::<HashMap<String, String>>();
@@ -508,7 +503,7 @@ fn validate_config(toml_config: TomlConfig) -> Result<Config, failure::Error> {
                 typ: UnitType::Command,
             },
         );
-        failure::ensure!(prev.is_none(), LapsError::Duplicate)
+        anyhow::ensure!(prev.is_none(), LapsError::Duplicate)
     }
 
     for (name, service) in toml_config.services {
@@ -535,7 +530,7 @@ fn validate_config(toml_config: TomlConfig) -> Result<Config, failure::Error> {
                 typ: UnitType::Service,
             },
         );
-        failure::ensure!(prev.is_none(), LapsError::Duplicate)
+        anyhow::ensure!(prev.is_none(), LapsError::Duplicate)
     }
 
     for (name, watch) in toml_config.watches {
@@ -574,7 +569,7 @@ fd -t f {extension_str} | entr {exec}
                 typ: UnitType::Watch,
             },
         );
-        failure::ensure!(prev.is_none(), LapsError::Duplicate)
+        anyhow::ensure!(prev.is_none(), LapsError::Duplicate)
     }
 
     let config = Config {
@@ -612,10 +607,10 @@ fn is_unblocked(
             && finished_children.is_superset(&wants_finished_in_scope))
 }
 
-fn ensure_deps_exist(config: Config) -> Result<Config, failure::Error> {
+fn ensure_deps_exist(config: Config) -> Result<Config> {
     for (name, unit) in &config.units {
         for dep in unit.wants_started.iter().chain(&unit.wants_finished) {
-            failure::ensure!(
+            anyhow::ensure!(
                 config.units.contains_key(&dep),
                 LapsError::UnknownDeps(name.clone(), dep.clone())
             )
@@ -625,7 +620,7 @@ fn ensure_deps_exist(config: Config) -> Result<Config, failure::Error> {
     Ok(config)
 }
 
-fn add_reverse_deps(mut config: Config) -> Result<Config, failure::Error> {
+fn add_reverse_deps(mut config: Config) -> Result<Config> {
     let mut after_started: HashMap<UnitName, Vec<UnitName>> = config
         .get_unit_names()
         .into_iter()
