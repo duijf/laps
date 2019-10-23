@@ -14,6 +14,8 @@ Watches include a specific file whitelist as well.
 Allow for `[environment.<sub>]` objects and make those flags for `laps`. E.g.
 an `[environment.dev]` section corresponds to a `laps --dev` flag.
 
+Nix integration.
+
 Implement file watching logic in Rust instead of relying on scripts.
 
 Filtered output / ncurses app when running multiple services.
@@ -22,10 +24,6 @@ Make it possible to filter loglevel of apps dynamically as long as they perform
 some structured logging. (Either: define protocol, or users specify regex)
 
 Filter on stderr / stdout.
-
-Virtual FS / chroot like features.
-
-Some caching stuff?
 
 ## Implemented
 
