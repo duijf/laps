@@ -4,8 +4,7 @@ Laps is a project automation tool. Status: pre-alpha.
 
 ## Ideas
 
-A display thing for error messages. Include more meta-data for the current
-error enum. Don't return boxed errors.
+Better error reporting for spawned tasks.
 
 Start processes in a a pseudo-terminal.
 
@@ -26,6 +25,8 @@ some structured logging. (Either: define protocol, or users specify regex)
 Filter on stderr / stdout.
 
 ## Implemented
+
+Reasonable error reporting for config validation.
 
 Make scripts use a random filename when executing. (Avoids race conditions and
 clashes.)
