@@ -111,7 +111,6 @@ enum UnitType {
     Watch,
 }
 
-// TODO: We cannot clone this, so we cannot put it in `Unit`.
 #[derive(Debug)]
 enum UnitStatus {
     Inactive,
@@ -246,30 +245,30 @@ fn main() -> Result<()> {
         for (unit_name, unit_status) in children.iter_mut() {
             match unit_status {
                 UnitStatus::Inactive => {
-                    if is_unblocked(
+                    if !is_unblocked(
                         &validated_config.units.get(&unit_name).unwrap(),
                         &exec_plan,
                         &running_children,
                         &finished_children,
                     ) {
-                        let unit = validated_config.units.get(&unit_name).unwrap();
-                        match &unit.exec_spec {
-                            ExecSpec::Exec(command, args) => {
-                                let child =
-                                    run_exec(&command, &args, &validated_config.environment)?;
-                                let child_pid: Pid = Pid::from_raw(child.id() as i32);
-                                *unit_status = UnitStatus::Running(child, child_pid);
-                            }
-                            ExecSpec::ExecScript(script_content) => {
-                                let child = run_exec_script(
-                                    &unit.name,
-                                    &script_content,
-                                    &validated_config.environment,
-                                    &temp_dir_base,
-                                )?;
-                                let child_pid: Pid = Pid::from_raw(child.id() as i32);
-                                *unit_status = UnitStatus::Running(child, child_pid);
-                            }
+                        continue;
+                    }
+                    let unit = validated_config.units.get(&unit_name).unwrap();
+                    match &unit.exec_spec {
+                        ExecSpec::Exec(command, args) => {
+                            let child = run_exec(&command, &args, &validated_config.environment)?;
+                            let child_pid: Pid = Pid::from_raw(child.id() as i32);
+                            *unit_status = UnitStatus::Running(child, child_pid);
+                        }
+                        ExecSpec::ExecScript(script_content) => {
+                            let child = run_exec_script(
+                                &unit.name,
+                                &script_content,
+                                &validated_config.environment,
+                                &temp_dir_base,
+                            )?;
+                            let child_pid: Pid = Pid::from_raw(child.id() as i32);
+                            *unit_status = UnitStatus::Running(child, child_pid);
                         }
                     }
                 }
