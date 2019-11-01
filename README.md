@@ -6,6 +6,8 @@ Laps is a project automation tool. Status: pre-alpha.
 
 Better error reporting for spawned tasks.
 
+Verification command for service start (e.g. `pg_isready`)
+
 Start processes in a a pseudo-terminal.
 
 Watches include a specific file whitelist as well.
