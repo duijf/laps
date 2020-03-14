@@ -1,6 +1,6 @@
 # laps
 
-Laps is a project automation tool. Status: pre-alpha.
+Laps is a project automation tool.
 
 ## Ideas
 
@@ -25,8 +25,6 @@ Make it possible to filter loglevel of apps dynamically as long as they perform
 some structured logging. (Either: define protocol, or users specify regex)
 
 Filter on stderr / stdout.
-
-## Implemented
 
 Reasonable error reporting for config validation.
 
