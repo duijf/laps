@@ -9,3 +9,9 @@ executable laps
   main-is:             Main.hs
   build-depends:       base >=4.13 && <4.14
   default-language:    Haskell2010
+  default-extensions:
+    DeriveGeneric,
+    FlexibleContexts,
+    LambdaCase,
+    OverloadedStrings,
+    TypeApplications
