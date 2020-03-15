@@ -10,5 +10,6 @@ in
     paths = with pkgs; [
       cabal-install
       haskell
+      watchexec
     ];
   }

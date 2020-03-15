@@ -1,5 +1,7 @@
 module Main where
 
+import           Data.List.NonEmpty (NonEmpty)
+import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Foldable as Foldable
 import           Data.Set (Set)
 import qualified Data.Set as Set
@@ -13,44 +15,77 @@ data NixEnv
   } deriving (Eq, Ord, Show)
 
 
-data Unit
+data Command
   = Command
-  { name :: String
-  , shortDesc :: String
-  , program :: String
-  , arguments :: [String]
-  , nixEnv :: Maybe NixEnv
-  } deriving (Eq, Ord, Show)
+    { name :: String
+    , shortDesc :: String
+    , program :: String
+    , arguments :: [String]
+    , nixEnv :: Maybe NixEnv
+    }
+  deriving (Eq, Ord, Show)
+
+
+data Watch
+  = Watch
+    { command :: Command
+    , extensions :: Maybe (NonEmpty String)
+    }
+  deriving (Eq, Ord, Show)
+
+
+data Unit = C Command | W Watch
+  deriving (Eq, Ord, Show)
 
 
 main :: IO ()
 main = do
   let
+    build :: Command = Command
+      { name = "build"
+      , shortDesc = "Build the project"
+      , program = "cabal"
+      , arguments = ["new-build"]
+      , nixEnv = Just (NixEnv { nixSrcFile = "default.nix" })
+      }
     units :: Set Unit = Set.fromList
-      [ Command
-        { name = "build"
-        , shortDesc = "Build the project"
-        , program = "cabal"
-        , arguments = ["new-build"]
-        , nixEnv = Just (NixEnv { nixSrcFile = "default.nix" })
+      [ C build
+      , W Watch
+        { command = build
+        , extensions = NonEmpty.nonEmpty ["hs", "cabal"]
         }
       ]
 
-  runUnits units
+  Foldable.for_ units runUnit
 
 
-getProcessConfig :: Unit -> ProcessConfig () () ()
-getProcessConfig unit = case nixEnv unit of
-  Just (env) ->
-    let
-      args = ["run", "-f", nixSrcFile env, "-c"] ++ [program unit] ++ arguments unit
-    in
-      Process.proc "nix" args
-  Nothing -> Process.proc (program unit) (arguments unit)
-
-
-runUnits :: Set Unit -> IO ()
-runUnits units = Foldable.for_ units (startProc . getProcessConfig)
+getCommandProgAndArgs :: Command -> (String, [String])
+getCommandProgAndArgs command =
+  case nixEnv command of
+    Just (env) -> ("nix", ["run", "-f", nixSrcFile env, "-c"] ++ [prog] ++ args)
+    Nothing -> (prog, args)
   where
-    -- TODO: Check exit codes in some way. Report results.
-    startProc config = () <$ Process.runProcess config
+    args = arguments command
+    prog = program command
+
+
+getWatchProgAndArgs :: Watch -> (String, [String])
+getWatchProgAndArgs watch = ("nix", ["run", "-c", "watchexec"] ++ extFilter ++ ["--"] ++ [prog] ++ args)
+  where
+    extFilter = case extensions watch of
+      Just exts -> ["--exts", Foldable.fold $ NonEmpty.intersperse "," exts]
+      Nothing -> []
+    (prog, args) = getCommandProgAndArgs (command watch)
+
+
+runUnit :: Unit -> IO ()
+runUnit unit = case unit of
+  C command -> do
+    let (prog, args) = getCommandProgAndArgs command
+    startProc prog args
+
+  W watch -> do
+    let (prog, args) = getWatchProgAndArgs watch
+    startProc prog args
+  where
+    startProc prog args = () <$ (Process.runProcess $ Process.proc prog args)
