@@ -1,10 +1,12 @@
 module Main where
 
-import           Data.List.NonEmpty (NonEmpty)
-import qualified Data.List.NonEmpty as NonEmpty
+import qualified Data.List as List
 import qualified Data.Foldable as Foldable
 import           Data.Set (Set)
 import qualified Data.Set as Set
+import qualified Dhall
+import           Dhall (FromDhall)
+import           GHC.Generics (Generic)
 import           System.Process.Typed (ProcessConfig)
 import qualified System.Process.Typed as Process
 
@@ -12,7 +14,9 @@ import qualified System.Process.Typed as Process
 data NixEnv
   = NixEnv
   { nixSrcFile :: FilePath
-  } deriving (Eq, Ord, Show)
+  } deriving (Eq, Generic, Ord, Show)
+
+instance FromDhall NixEnv
 
 
 data Command
@@ -23,19 +27,25 @@ data Command
     , arguments :: [String]
     , nixEnv :: Maybe NixEnv
     }
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Generic, Ord, Show)
+
+instance FromDhall Command
 
 
 data Watch
   = Watch
     { command :: Command
-    , extensions :: Maybe (NonEmpty String)
+    , extensions :: [String]
     }
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Generic, Ord, Show)
+
+instance FromDhall Watch
 
 
 data Unit = C Command | W Watch
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Generic, Ord, Show)
+
+instance FromDhall Unit
 
 
 main :: IO ()
@@ -52,7 +62,7 @@ main = do
       [ C build
       , W Watch
         { command = build
-        , extensions = NonEmpty.nonEmpty ["hs", "cabal"]
+        , extensions = ["hs", "cabal"]
         }
       ]
 
@@ -73,8 +83,8 @@ getWatchProgAndArgs :: Watch -> (String, [String])
 getWatchProgAndArgs watch = ("nix", ["run", "-c", "watchexec"] ++ extFilter ++ ["--"] ++ [prog] ++ args)
   where
     extFilter = case extensions watch of
-      Just exts -> ["--exts", Foldable.fold $ NonEmpty.intersperse "," exts]
-      Nothing -> []
+      [] -> []
+      exts -> ["--exts", Foldable.fold $ List.intersperse "," exts]
     (prog, args) = getCommandProgAndArgs (command watch)
 
 

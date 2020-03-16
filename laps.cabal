@@ -10,6 +10,7 @@ executable laps
   build-depends:
     base,
     containers,
+    dhall,
     typed-process
   default-language:    Haskell2010
   default-extensions:
