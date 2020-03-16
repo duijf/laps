@@ -1,15 +1,16 @@
+{ pkgs ?  (import ./nix/nixpkgs.nix {})
+}:
+
+with pkgs;
+
 let
-  pkgs = import ./nix/nixpkgs.nix {};
-  haskell = pkgs.haskellPackages.ghcWithPackages (ps: [
-    ps.containers
-    ps.typed-process
-  ]);
+  ghc = haskellPackages.ghcWithPackages (import ./nix/haskell-deps.nix);
 in
-  pkgs.buildEnv {
+  buildEnv {
     name = "laps-devenv";
-    paths = with pkgs; [
+    paths = [
       cabal-install
-      haskell
+      ghc
       watchexec
     ];
   }
