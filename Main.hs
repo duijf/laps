@@ -8,6 +8,7 @@ import qualified Data.Foldable as Foldable
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.String.Conversions (cs)
+import           Data.Text (Text)
 import qualified Data.Text.IO as Text
 import           Dhall (FromDhall, ToDhall)
 import qualified Dhall
@@ -69,16 +70,7 @@ getCommandProgAndArgs :: Command -> IO (String, [String])
 getCommandProgAndArgs command = do
   (prog, args) <- case start command of
     Script{interpreter, contents} -> do
-      (path, handle) <- Temp.mkstemp "/tmp/laps-"
-
-      Text.hPutStr   handle "#!"
-      Text.hPutStrLn handle interpreter
-      Text.hPutStr   handle contents
-      IO.hClose      handle
-
-      status <- Files.getFileStatus path
-      Files.setFileMode path (Files.fileMode status `Files.unionFileModes` Files.ownerExecuteMode)
-
+      path <- writeScript interpreter contents
       pure (path, [])
 
     Program{program, arguments} -> pure (cs $ program, cs <$> arguments)
@@ -92,6 +84,21 @@ getCommandProgAndArgs command = do
     case nixEnv command of
       Just (env) -> ("nix", ["run", "-f", cs $ srcFile env, "-c"] ++ watchExec ++ [prog] ++ args)
       Nothing -> (prog, args)
+
+
+writeScript :: Text -> Text -> IO FilePath
+writeScript interpreter contents = do
+  (path, handle) <- Temp.mkstemp "/tmp/laps-"
+
+  Text.hPutStr   handle "#!"
+  Text.hPutStrLn handle interpreter
+  Text.hPutStr   handle contents
+  IO.hClose      handle
+
+  status <- Files.getFileStatus path
+  Files.setFileMode path (Files.fileMode status `Files.unionFileModes` Files.ownerExecuteMode)
+
+  pure $ path
 
 
 runCommand :: Command -> IO ()
