@@ -1,105 +1,68 @@
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE TemplateHaskell #-}
+
 module Main where
 
 import qualified Data.List as List
 import qualified Data.Foldable as Foldable
 import           Data.Set (Set)
 import qualified Data.Set as Set
-import qualified Dhall
+import           Data.String.Conversions (cs)
 import           Dhall (FromDhall, ToDhall)
+import qualified Dhall
+import qualified Dhall.TH as Dhall
 import           GHC.Generics (Generic)
 import           System.Process.Typed (ProcessConfig)
 import qualified System.Process.Typed as Process
 
 
-data NixEnv
-  = NixEnv
-  { nixSrcFile :: FilePath
-  } deriving (Eq, Generic, Ord, Show)
-
-instance FromDhall NixEnv
-instance ToDhall NixEnv
-
-
-data Command
-  = Command
-    { name :: String
-    , shortDesc :: String
-    , program :: String
-    , arguments :: [String]
-    , nixEnv :: Maybe NixEnv
+Dhall.makeHaskellTypes
+  [ Dhall.SingleConstructor
+    { Dhall.typeName = "NixEnv"
+    , Dhall.constructorName = "NixEnv"
+    , Dhall.code  = "(./Types.dhall).NixEnv"
     }
-  deriving (Eq, Generic, Ord, Show)
+  , Dhall.SingleConstructor
+    { Dhall.typeName = "Command"
+    , Dhall.constructorName = "Command"
+    , Dhall.code = "(./Types.dhall).Command"
+    }
+  ]
 
+
+deriving instance Show Command
+deriving instance Eq Command
+deriving instance Ord Command
+deriving instance Generic Command
 instance FromDhall Command
-instance ToDhall Command
 
-
-data Watch
-  = Watch
-    { command :: Command
-    , extensions :: [String]
-    }
-  deriving (Eq, Generic, Ord, Show)
-
-instance FromDhall Watch
-instance ToDhall Watch
-
-
-data Unit = C Command | W Watch
-  deriving (Eq, Generic, Ord, Show)
-
-instance FromDhall Unit
-instance ToDhall Unit
+deriving instance Show NixEnv
+deriving instance Eq NixEnv
+deriving instance Ord NixEnv
+deriving instance Generic NixEnv
+instance FromDhall NixEnv
 
 
 main :: IO ()
 main = do
-  -- let
-    -- build :: Command = Command
-    --   { name = "build"
-    --   , shortDesc = "Build the project"
-    --   , program = "cabal"
-    --   , arguments = ["new-build"]
-    --   , nixEnv = Just (NixEnv { nixSrcFile = "default.nix" })
-    --   }
-    -- units :: Set Unit = Set.fromList
-    --   [ C build
-    --   , W Watch
-    --     { command = build
-    --     , extensions = ["hs", "cabal"]
-    --     }
-    --   ]
-  units :: Set Unit <- Dhall.inputFile Dhall.auto "./Laps.dhall"
-  Foldable.for_ units runUnit
+  commands :: Set Command <- Dhall.inputFile Dhall.auto "./Laps.dhall"
+  Foldable.for_ commands runCommand
 
 
 getCommandProgAndArgs :: Command -> (String, [String])
 getCommandProgAndArgs command =
   case nixEnv command of
-    Just (env) -> ("nix", ["run", "-f", nixSrcFile env, "-c"] ++ [prog] ++ args)
+    Just (env) -> ("nix", ["run", "-f", cs $ srcFile env, "-c"] ++ watchExec ++ [prog] ++ args)
     Nothing -> (prog, args)
   where
-    args = arguments command
-    prog = program command
-
-
-getWatchProgAndArgs :: Watch -> (String, [String])
-getWatchProgAndArgs watch = ("nix", ["run", "-c", "watchexec"] ++ extFilter ++ ["--"] ++ [prog] ++ args)
-  where
-    extFilter = case extensions watch of
+    watchExec = case watchExtensions command of
       [] -> []
-      exts -> ["--exts", Foldable.fold $ List.intersperse "," exts]
-    (prog, args) = getCommandProgAndArgs (command watch)
+      exts -> ["watchexec", "--exts", Foldable.fold $ List.intersperse "," $ cs <$> exts, "--"]
+    args = cs <$> arguments command
+    prog = cs $ program command
 
 
-runUnit :: Unit -> IO ()
-runUnit unit = case unit of
-  C command -> do
-    let (prog, args) = getCommandProgAndArgs command
-    startProc prog args
-
-  W watch -> do
-    let (prog, args) = getWatchProgAndArgs watch
-    startProc prog args
-  where
-    startProc prog args = () <$ (Process.runProcess $ Process.proc prog args)
+runCommand :: Command -> IO ()
+runCommand command = do
+  let (prog, args) = getCommandProgAndArgs command
+  () <$ (Process.runProcess $ Process.proc prog args)

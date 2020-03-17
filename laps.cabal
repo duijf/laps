@@ -11,6 +11,7 @@ executable laps
     base,
     containers,
     dhall,
+    string-conversions,
     typed-process
   default-language:    Haskell2010
   default-extensions:
