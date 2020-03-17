@@ -5,7 +5,7 @@ import qualified Data.Foldable as Foldable
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import qualified Dhall
-import           Dhall (FromDhall)
+import           Dhall (FromDhall, ToDhall)
 import           GHC.Generics (Generic)
 import           System.Process.Typed (ProcessConfig)
 import qualified System.Process.Typed as Process
@@ -17,6 +17,7 @@ data NixEnv
   } deriving (Eq, Generic, Ord, Show)
 
 instance FromDhall NixEnv
+instance ToDhall NixEnv
 
 
 data Command
@@ -30,6 +31,7 @@ data Command
   deriving (Eq, Generic, Ord, Show)
 
 instance FromDhall Command
+instance ToDhall Command
 
 
 data Watch
@@ -40,32 +42,34 @@ data Watch
   deriving (Eq, Generic, Ord, Show)
 
 instance FromDhall Watch
+instance ToDhall Watch
 
 
 data Unit = C Command | W Watch
   deriving (Eq, Generic, Ord, Show)
 
 instance FromDhall Unit
+instance ToDhall Unit
 
 
 main :: IO ()
 main = do
-  let
-    build :: Command = Command
-      { name = "build"
-      , shortDesc = "Build the project"
-      , program = "cabal"
-      , arguments = ["new-build"]
-      , nixEnv = Just (NixEnv { nixSrcFile = "default.nix" })
-      }
-    units :: Set Unit = Set.fromList
-      [ C build
-      , W Watch
-        { command = build
-        , extensions = ["hs", "cabal"]
-        }
-      ]
-
+  -- let
+    -- build :: Command = Command
+    --   { name = "build"
+    --   , shortDesc = "Build the project"
+    --   , program = "cabal"
+    --   , arguments = ["new-build"]
+    --   , nixEnv = Just (NixEnv { nixSrcFile = "default.nix" })
+    --   }
+    -- units :: Set Unit = Set.fromList
+    --   [ C build
+    --   , W Watch
+    --     { command = build
+    --     , extensions = ["hs", "cabal"]
+    --     }
+    --   ]
+  units :: Set Unit <- Dhall.inputFile Dhall.auto "./Laps.dhall"
   Foldable.for_ units runUnit
 
 
