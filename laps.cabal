@@ -12,12 +12,15 @@ executable laps
     containers,
     dhall,
     string-conversions,
-    typed-process
+    text,
+    typed-process,
+    unix
   default-language:    Haskell2010
   default-extensions:
     DeriveGeneric,
     FlexibleContexts,
     LambdaCase,
+    NamedFieldPuns,
     OverloadedStrings,
     ScopedTypeVariables,
     TypeApplications

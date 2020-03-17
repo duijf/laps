@@ -8,10 +8,14 @@ import qualified Data.Foldable as Foldable
 import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.String.Conversions (cs)
+import qualified Data.Text.IO as Text
 import           Dhall (FromDhall, ToDhall)
 import qualified Dhall
 import qualified Dhall.TH as Dhall
 import           GHC.Generics (Generic)
+import qualified System.IO as IO
+import qualified System.Posix.Files as Files
+import qualified System.Posix.Temp as Temp
 import           System.Process.Typed (ProcessConfig)
 import qualified System.Process.Typed as Process
 
@@ -61,20 +65,36 @@ main = do
   Foldable.for_ commands runCommand
 
 
-getCommandProgAndArgs :: Command -> (String, [String])
-getCommandProgAndArgs command =
-  case nixEnv command of
-    Just (env) -> ("nix", ["run", "-f", cs $ srcFile env, "-c"] ++ watchExec ++ [prog] ++ args)
-    Nothing -> (prog, args)
-  where
+getCommandProgAndArgs :: Command -> IO (String, [String])
+getCommandProgAndArgs command = do
+  (prog, args) <- case start command of
+    Script{interpreter, contents} -> do
+      (path, handle) <- Temp.mkstemp "/tmp/laps-"
+
+      Text.hPutStr   handle "#!"
+      Text.hPutStrLn handle interpreter
+      Text.hPutStr   handle contents
+      IO.hClose      handle
+
+      status <- Files.getFileStatus path
+      Files.setFileMode path (Files.fileMode status `Files.unionFileModes` Files.ownerExecuteMode)
+
+      pure (path, [])
+
+    Program{program, arguments} -> pure (cs $ program, cs <$> arguments)
+
+  let
     watchExec = case watchExtensions command of
       [] -> []
       exts -> ["watchexec", "--exts", Foldable.fold $ List.intersperse "," $ cs <$> exts, "--"]
-    args = cs <$> arguments command
-    prog = cs $ program command
+
+  pure $
+    case nixEnv command of
+      Just (env) -> ("nix", ["run", "-f", cs $ srcFile env, "-c"] ++ watchExec ++ [prog] ++ args)
+      Nothing -> (prog, args)
 
 
 runCommand :: Command -> IO ()
 runCommand command = do
-  let (prog, args) = getCommandProgAndArgs command
+  (prog, args) <- getCommandProgAndArgs command
   () <$ (Process.runProcess $ Process.proc prog args)
