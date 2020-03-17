@@ -22,6 +22,10 @@ Dhall.makeHaskellTypes
     , Dhall.constructorName = "NixEnv"
     , Dhall.code  = "(./Types.dhall).NixEnv"
     }
+  , Dhall.MultipleConstructors
+    { Dhall.typeName = "Start"
+    , Dhall.code  = "(./Types.dhall).Start"
+    }
   , Dhall.SingleConstructor
     { Dhall.typeName = "Command"
     , Dhall.constructorName = "Command"
@@ -30,17 +34,25 @@ Dhall.makeHaskellTypes
   ]
 
 
-deriving instance Show Command
-deriving instance Eq Command
-deriving instance Ord Command
-deriving instance Generic Command
-instance FromDhall Command
+deriving instance Show Start
+deriving instance Eq Start
+deriving instance Ord Start
+deriving instance Generic Start
+instance FromDhall Start
+
 
 deriving instance Show NixEnv
 deriving instance Eq NixEnv
 deriving instance Ord NixEnv
 deriving instance Generic NixEnv
 instance FromDhall NixEnv
+
+
+deriving instance Show Command
+deriving instance Eq Command
+deriving instance Ord Command
+deriving instance Generic Command
+instance FromDhall Command
 
 
 main :: IO ()
