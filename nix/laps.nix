@@ -10,7 +10,7 @@ mkDerivation {
 
   src = lib.cleanSourceWith {
     filter = path: type:
-      (lib.hasSuffix ".cabal" path || lib.hasSuffix ".hs" path) &&
+      (lib.hasSuffix ".cabal" path || lib.hasSuffix ".hs" path || lib.hasSuffix ".dhall" path) &&
       lib.cleanSourceFilter path type;
     src = ../.;
   };
