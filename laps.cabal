@@ -19,8 +19,11 @@ executable laps
   default-extensions:
     DeriveGeneric,
     FlexibleContexts,
+    FlexibleInstances,
     LambdaCase,
+    MultiParamTypeClasses,
     NamedFieldPuns,
     OverloadedStrings,
     ScopedTypeVariables,
+    StandaloneDeriving,
     TypeApplications
