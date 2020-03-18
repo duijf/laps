@@ -85,29 +85,17 @@ main = do
     Exit.exitSuccess)
 
   when (length args > 1) (do
-    ANSI.setSGR [ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Red]
-    Text.putStr "error:"
-    ANSI.setSGR [ANSI.Reset]
+    printColor ANSI.Red "error:"
     Text.putStr " Laps expects a single argument "
-    ANSI.setSGR [ANSI.SetConsoleIntensity ANSI.BoldIntensity]
-    Text.putStr "COMMAND"
-    ANSI.setSGR [ANSI.Reset]
+    printBold   "COMMAND"
     Text.putStr " got "
-    ANSI.setSGR [ ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Yellow]
-    Text.putStr (Text.intercalate " " args)
-    ANSI.setSGR [ANSI.Reset]
+    printBold   (Text.intercalate " " args)
     Text.putStr "\n"
-    ANSI.setSGR [ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Cyan]
-    Text.putStr " hint:"
-    ANSI.setSGR [ANSI.Reset]
+    printColor ANSI.Cyan " hint:"
     Text.putStr " Run "
-    ANSI.setSGR [ANSI.SetConsoleIntensity ANSI.BoldIntensity]
-    Text.putStr "laps"
-    ANSI.setSGR [ANSI.Reset]
+    printBold   "laps"
     Text.putStr " without arguments for a list of available "
-    ANSI.setSGR [ANSI.SetConsoleIntensity ANSI.BoldIntensity]
-    Text.putStr "COMMAND"
-    ANSI.setSGR [ANSI.Reset]
+    printBold   "COMMAND"
     Text.putStr "s\n"
     Exit.exitFailure)
 
@@ -115,20 +103,21 @@ main = do
     Just command ->
       runCommand command
     Nothing -> do
-      ANSI.setSGR [ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Red]
-      Text.putStr "error:"
-      ANSI.setSGR [ANSI.Reset]
+      printColor ANSI.Red "error:"
       Text.putStr " No command "
-      ANSI.setSGR [ANSI.SetConsoleIntensity ANSI.BoldIntensity]
-      Text.putStr (head args)
-      ANSI.setSGR [ANSI.Reset]
+      printBold   (head args)
       Text.putStr " defined in Laps.dhall.\n"
-      ANSI.setSGR [ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Cyan]
-      Text.putStr " hint:"
-      ANSI.setSGR [ANSI.Reset]
+      printColor ANSI.Cyan " hint:"
       Text.putStr " Available commands are: "
       Foldable.fold $ List.intersperse (Text.putStr ", ") $ printBold <$> (Map.keys commands)
       Text.putStr "\n"
+
+
+printColor :: ANSI.Color -> Text -> IO ()
+printColor color t = do
+  ANSI.setSGR [ANSI.SetColor ANSI.Foreground ANSI.Vivid color]
+  Text.putStr t
+  ANSI.setSGR [ANSI.Reset]
 
 
 printBold :: Text -> IO ()
@@ -142,13 +131,9 @@ printHelp :: Map Text Command -> IO ()
 printHelp commands = do
   Text.putStrLn "Laps - Project automation\n"
   Text.putStr "Define commands in "
-  ANSI.setSGR [ANSI.SetConsoleIntensity ANSI.BoldIntensity]
-  Text.putStr "Laps.dhall"
-  ANSI.setSGR [ANSI.Reset]
+  printBold   "Laps.dhall"
   Text.putStr ". Use "
-  ANSI.setSGR [ANSI.SetConsoleIntensity ANSI.BoldIntensity]
-  Text.putStr "laps COMMAND"
-  ANSI.setSGR [ANSI.Reset]
+  printBold   "laps COMMAND"
   Text.putStr " to run them.\n\n"
   Text.putStr "COMMANDS\n"
   Foldable.for_ commands printCommand
