@@ -28,7 +28,7 @@ mkDerivation {
           url = "https://github.com/duijf/laps.git";
           name = "laps-git";
           ref = "haskell";
-          rev = "406b7c2e21cbecc5067eb95539bde455cb79e02a";
+          rev = "a55635bb5ba3bfccdfd83520a41180b2eeaa671f";
         };
     in
       if devBuild then devSrc else releaseSrc;
