@@ -2,6 +2,7 @@
 
 module Main where
 
+import           Control.Monad (when)
 import qualified Data.List as List
 import qualified Data.Foldable as Foldable
 import           Data.Set (Set)
@@ -13,7 +14,10 @@ import           Dhall (FromDhall, ToDhall)
 import qualified Dhall
 import qualified Dhall.TH as Dhall
 import           GHC.Generics (Generic)
+import qualified System.Console.ANSI as ANSI
+import qualified System.Exit as Exit
 import qualified System.IO as IO
+import qualified System.Posix.Env.ByteString as Env
 import qualified System.Posix.Files as Files
 import qualified System.Posix.Temp as Temp
 import           System.Process.Typed (ProcessConfig)
@@ -68,7 +72,39 @@ instance (Functor f, ConvertibleStrings a b) => ConvertibleStrings (f a) (f b) w
 main :: IO ()
 main = do
   commands :: Set Command <- Dhall.inputFile Dhall.auto "./Laps.dhall"
+
+  args :: [Text] <- cs <$> Env.getArgs
+
+  when (length args == 0) (do
+    printHelp commands
+    Exit.exitSuccess)
+
   Foldable.for_ commands runCommand
+
+
+printHelp :: Set Command -> IO ()
+printHelp commands = do
+  Text.putStrLn "Laps - Project automation\n"
+  Text.putStr "Define commands in "
+  ANSI.setSGR [ANSI.SetConsoleIntensity ANSI.BoldIntensity]
+  Text.putStr "Laps.dhall"
+  ANSI.setSGR [ANSI.Reset]
+  Text.putStr ". Use "
+  ANSI.setSGR [ANSI.SetConsoleIntensity ANSI.BoldIntensity]
+  Text.putStr "laps COMMAND"
+  ANSI.setSGR [ANSI.Reset]
+  Text.putStr " to run them.\n\n"
+  Text.putStr "COMMANDS\n"
+  Foldable.for_ commands printCommand
+
+
+printCommand :: Command -> IO ()
+printCommand command = do
+  Text.putStrLn ""
+  Text.putStr   "  "
+  Text.putStrLn (name command)
+  Text.putStr   "    "
+  Text.putStrLn (shortDesc command)
 
 
 getCommandProgAndArgs :: Command -> IO (String, [String], Maybe FilePath)

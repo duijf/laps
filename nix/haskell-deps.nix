@@ -1,6 +1,7 @@
 haskellPackages:
   with haskellPackages;
     [
+      ansi-terminal
       containers
       dhall
       string-conversions

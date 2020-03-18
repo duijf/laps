@@ -8,6 +8,7 @@ build-type:          Simple
 executable laps
   main-is:             Main.hs
   build-depends:
+    ansi-terminal,
     base,
     containers,
     dhall,
