@@ -14,5 +14,6 @@ in
       ghc
       watchexec
       release.laps
+      stylish-haskell
     ];
   }

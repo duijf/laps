@@ -3,12 +3,12 @@
 module Main where
 
 import           Control.Monad (when)
+import qualified Data.Foldable as Foldable
 import           Data.Function ((&))
 import qualified Data.List as List
-import qualified Data.Foldable as Foldable
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
-import           Data.String.Conversions (ConvertibleStrings(..), cs)
+import           Data.String.Conversions (ConvertibleStrings (..), cs)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
