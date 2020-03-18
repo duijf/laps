@@ -1,4 +1,3 @@
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Main where
@@ -7,7 +6,7 @@ import qualified Data.List as List
 import qualified Data.Foldable as Foldable
 import           Data.Set (Set)
 import qualified Data.Set as Set
-import           Data.String.Conversions (cs)
+import           Data.String.Conversions (ConvertibleStrings(..), cs)
 import           Data.Text (Text)
 import qualified Data.Text.IO as Text
 import           Dhall (FromDhall, ToDhall)
@@ -60,6 +59,12 @@ deriving instance Generic Command
 instance FromDhall Command
 
 
+-- Instance allowing `cs` on lists and maybes of String, Text,
+-- ByteString, etc.
+instance (Functor f, ConvertibleStrings a b) => ConvertibleStrings (f a) (f b) where
+  convertString = fmap cs
+
+
 main :: IO ()
 main = do
   commands :: Set Command <- Dhall.inputFile Dhall.auto "./Laps.dhall"
@@ -73,12 +78,12 @@ getCommandProgAndArgs command = do
       path <- writeScript interpreter contents
       pure (path, [], Just path)
 
-    Program{program, arguments} -> pure (cs $ program, cs <$> arguments, Nothing)
+    Program{program, arguments} -> pure (cs $ program, cs $ arguments, Nothing)
 
   let
     watchExec = case watchExtensions command of
       [] -> []
-      exts -> ["watchexec", "--exts", Foldable.fold $ List.intersperse "," $ cs <$> exts, "--"]
+      exts -> ["watchexec", "--exts", Foldable.fold $ List.intersperse "," $ cs $ exts, "--"]
 
   pure $
     case nixEnv command of
