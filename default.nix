@@ -12,8 +12,8 @@ in
     paths = [
       cabal-install
       ghc
-      watchexec
-      release.laps
+      release.laps-dev
       stylish-haskell
+      watchexec
     ];
   }
