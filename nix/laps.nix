@@ -42,7 +42,7 @@ mkDerivation {
   # DB, so we won't bother.
   executableHaskellDepends = import ./haskell-deps.nix haskellPackages;
 
-  executableSystemDepends = [
+  executableToolDepends = [
     watchexec
   ];
 
