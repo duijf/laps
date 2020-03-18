@@ -9,6 +9,7 @@ import           Data.Set (Set)
 import qualified Data.Set as Set
 import           Data.String.Conversions (ConvertibleStrings(..), cs)
 import           Data.Text (Text)
+import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import           Dhall (FromDhall, ToDhall)
 import qualified Dhall
@@ -78,6 +79,21 @@ main = do
   when (length args == 0) (do
     printHelp commands
     Exit.exitSuccess)
+
+  when (length args > 1) (do
+    ANSI.setSGR [ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Red]
+    Text.putStr "error:"
+    ANSI.setSGR [ANSI.Reset]
+    Text.putStr " laps expects a single argument "
+    ANSI.setSGR [ANSI.SetConsoleIntensity ANSI.BoldIntensity]
+    Text.putStr "COMMAND"
+    ANSI.setSGR [ANSI.Reset]
+    Text.putStr " got "
+    ANSI.setSGR [ANSI.SetConsoleIntensity ANSI.BoldIntensity]
+    Text.putStr (Text.intercalate " " args)
+    ANSI.setSGR [ANSI.Reset]
+    Text.putStr "\n"
+    Exit.exitFailure)
 
   Foldable.for_ commands runCommand
 
