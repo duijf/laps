@@ -3,4 +3,5 @@
 
 {
   laps = pkgs.haskellPackages.callPackage ./nix/laps.nix {};
+  lapsDev = pkgs.haskellPackages.callPackage ./nix/laps.nix { devBuild = true; };
 }

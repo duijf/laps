@@ -2,18 +2,36 @@
 , lib
 , mkDerivation
 , watchexec
+, devBuild ? false
 }:
 
 mkDerivation {
   pname = "laps";
   version = "0.0.1.0-unreleased";
 
-  src = lib.cleanSourceWith {
-    filter = path: type:
-      (lib.hasSuffix ".cabal" path || lib.hasSuffix ".hs" path || lib.hasSuffix ".dhall" path) &&
-      lib.cleanSourceFilter path type;
-    src = ../.;
-  };
+  src =
+    let
+      devSrc = lib.cleanSourceWith {
+        filter = path: type:
+          (lib.hasSuffix ".cabal" path || lib.hasSuffix ".hs" path || lib.hasSuffix ".dhall" path) &&
+          lib.cleanSourceFilter path type;
+        src = ../.;
+      };
+
+      # A previously known good commit of the repo, so we can keep using Laps
+      # itself to develop Laps. This permits introducing build errors in the
+      # working copy of the repository while still having Laps available for
+      # our build commands.
+      releaseSrc =
+        fetchGit {
+          # We cannot use `url = ../.;`. That makes Nix complain.
+          url = "https://github.com/duijf/laps.git";
+          name = "laps-git";
+          ref = "haskell";
+          rev = "406b7c2e21cbecc5067eb95539bde455cb79e02a";
+        };
+    in
+      if devBuild then devSrc else releaseSrc;
 
   isLibrary = false;
   isExecutable = true;

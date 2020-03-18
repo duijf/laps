@@ -5,6 +5,7 @@ with pkgs;
 
 let
   ghc = haskellPackages.ghcWithPackages (import ./nix/haskell-deps.nix);
+  release = (import ./release.nix) { inherit pkgs; };
 in
   buildEnv {
     name = "laps-devenv";
@@ -12,5 +13,6 @@ in
       cabal-install
       ghc
       watchexec
+      release.laps
     ];
   }
