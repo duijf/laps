@@ -3,10 +3,11 @@
 module Main where
 
 import           Control.Monad (when)
+import           Data.Function ((&))
 import qualified Data.List as List
 import qualified Data.Foldable as Foldable
-import           Data.Set (Set)
-import qualified Data.Set as Set
+import           Data.Map.Strict (Map)
+import qualified Data.Map.Strict as Map
 import           Data.String.Conversions (ConvertibleStrings(..), cs)
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -72,7 +73,10 @@ instance (Functor f, ConvertibleStrings a b) => ConvertibleStrings (f a) (f b) w
 
 main :: IO ()
 main = do
-  commands :: Set Command <- Dhall.inputFile Dhall.auto "./Laps.dhall"
+  dhallCommands :: [Command] <- Dhall.input Dhall.auto "./Laps.dhall"
+
+  let
+    commands :: Map Text Command = Map.fromList $ fmap (\c -> (name c, c)) dhallCommands
 
   args :: [Text] <- cs <$> Env.getArgs
 
@@ -107,16 +111,34 @@ main = do
     Text.putStr "s\n"
     Exit.exitFailure)
 
-  let
-    userCommand = head args
+  Map.lookup (head args) commands & \case
+    Just command ->
+      runCommand command
+    Nothing -> do
+      ANSI.setSGR [ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Red]
+      Text.putStr "error:"
+      ANSI.setSGR [ANSI.Reset]
+      Text.putStr " No command "
+      ANSI.setSGR [ANSI.SetConsoleIntensity ANSI.BoldIntensity]
+      Text.putStr (head args)
+      ANSI.setSGR [ANSI.Reset]
+      Text.putStr " defined in Laps.dhall.\n"
+      ANSI.setSGR [ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Cyan]
+      Text.putStr " hint:"
+      ANSI.setSGR [ANSI.Reset]
+      Text.putStr " Available commands are: "
+      Foldable.fold $ List.intersperse (Text.putStr ", ") $ printBold <$> (Map.keys commands)
+      Text.putStr "\n"
 
-    -- We should probably use a Map for this.
-    command = Set.findMin $ Set.filter (\c -> name c == userCommand) commands
 
-  runCommand command
+printBold :: Text -> IO ()
+printBold t = do
+  ANSI.setSGR [ANSI.SetConsoleIntensity ANSI.BoldIntensity]
+  Text.putStr t
+  ANSI.setSGR [ANSI.Reset]
 
 
-printHelp :: Set Command -> IO ()
+printHelp :: Map Text Command -> IO ()
 printHelp commands = do
   Text.putStrLn "Laps - Project automation\n"
   Text.putStr "Define commands in "
