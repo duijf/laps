@@ -84,15 +84,27 @@ main = do
     ANSI.setSGR [ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Red]
     Text.putStr "error:"
     ANSI.setSGR [ANSI.Reset]
-    Text.putStr " laps expects a single argument "
+    Text.putStr " Laps expects a single argument "
     ANSI.setSGR [ANSI.SetConsoleIntensity ANSI.BoldIntensity]
     Text.putStr "COMMAND"
     ANSI.setSGR [ANSI.Reset]
     Text.putStr " got "
-    ANSI.setSGR [ANSI.SetConsoleIntensity ANSI.BoldIntensity]
+    ANSI.setSGR [ ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Yellow]
     Text.putStr (Text.intercalate " " args)
     ANSI.setSGR [ANSI.Reset]
     Text.putStr "\n"
+    ANSI.setSGR [ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Cyan]
+    Text.putStr " hint:"
+    ANSI.setSGR [ANSI.Reset]
+    Text.putStr " Run "
+    ANSI.setSGR [ANSI.SetConsoleIntensity ANSI.BoldIntensity]
+    Text.putStr "laps"
+    ANSI.setSGR [ANSI.Reset]
+    Text.putStr " without arguments for a list of available "
+    ANSI.setSGR [ANSI.SetConsoleIntensity ANSI.BoldIntensity]
+    Text.putStr "COMMAND"
+    ANSI.setSGR [ANSI.Reset]
+    Text.putStr "s\n"
     Exit.exitFailure)
 
   Foldable.for_ commands runCommand
@@ -118,7 +130,9 @@ printCommand :: Command -> IO ()
 printCommand command = do
   Text.putStrLn ""
   Text.putStr   "  "
+  ANSI.setSGR [ANSI.SetConsoleIntensity ANSI.BoldIntensity]
   Text.putStrLn (name command)
+  ANSI.setSGR [ANSI.Reset]
   Text.putStr   "    "
   Text.putStrLn (shortDesc command)
 
