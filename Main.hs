@@ -107,7 +107,13 @@ main = do
     Text.putStr "s\n"
     Exit.exitFailure)
 
-  Foldable.for_ commands runCommand
+  let
+    userCommand = head args
+
+    -- We should probably use a Map for this.
+    command = Set.findMin $ Set.filter (\c -> name c == userCommand) commands
+
+  runCommand command
 
 
 printHelp :: Set Command -> IO ()
