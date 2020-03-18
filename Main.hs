@@ -66,14 +66,14 @@ main = do
   Foldable.for_ commands runCommand
 
 
-getCommandProgAndArgs :: Command -> IO (String, [String])
+getCommandProgAndArgs :: Command -> IO (String, [String], Maybe FilePath)
 getCommandProgAndArgs command = do
-  (prog, args) <- case start command of
+  (prog, args, tempScript) <- case start command of
     Script{interpreter, contents} -> do
       path <- writeScript interpreter contents
-      pure (path, [])
+      pure (path, [], Just path)
 
-    Program{program, arguments} -> pure (cs $ program, cs <$> arguments)
+    Program{program, arguments} -> pure (cs $ program, cs <$> arguments, Nothing)
 
   let
     watchExec = case watchExtensions command of
@@ -82,8 +82,8 @@ getCommandProgAndArgs command = do
 
   pure $
     case nixEnv command of
-      Just (env) -> ("nix", ["run", "-f", cs $ srcFile env, "-c"] ++ watchExec ++ [prog] ++ args)
-      Nothing -> (prog, args)
+      Just (env) -> ("nix", ["run", "-f", cs $ srcFile env, "-c"] ++ watchExec ++ [prog] ++ args, tempScript)
+      Nothing -> (prog, args, tempScript)
 
 
 writeScript :: Text -> Text -> IO FilePath
@@ -103,5 +103,8 @@ writeScript interpreter contents = do
 
 runCommand :: Command -> IO ()
 runCommand command = do
-  (prog, args) <- getCommandProgAndArgs command
+  (prog, args, tempScript) <- getCommandProgAndArgs command
   () <$ (Process.runProcess $ Process.proc prog args)
+
+  -- Clean up temporary script if it exists.
+  maybe (pure mempty) Files.removeLink tempScript
