@@ -15,7 +15,7 @@ in  [ { name = "build"
             { interpreter = "/bin/bash"
             , contents =
                 ''
-                fd -e dhall --exec dhall format --inplace {}
+                fd -e dhall --exec dhall --ascii format --inplace {}
                 fd -e hs --exec stylish-haskell --inplace {}
                 ''
             }
