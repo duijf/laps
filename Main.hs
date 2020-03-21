@@ -1,10 +1,19 @@
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Main where
 
 import           Control.Monad (when)
+import           Data.Fix (Fix (..))
+import qualified Data.Fix as Fix
 import qualified Data.Foldable as Foldable
 import           Data.Function ((&))
+import qualified Data.Functor.Foldable as RSFoldable
+import qualified Data.Functor.Foldable.TH as RSTH
 import qualified Data.List as List
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -30,16 +39,11 @@ Dhall.makeHaskellTypes
   [ Dhall.SingleConstructor
     { Dhall.typeName = "NixEnv"
     , Dhall.constructorName = "NixEnv"
-    , Dhall.code  = "(./Types.dhall).NixEnv"
+    , Dhall.code  = "(./package.dhall).NixEnv"
     }
   , Dhall.MultipleConstructors
     { Dhall.typeName = "Start"
-    , Dhall.code  = "(./Types.dhall).Start"
-    }
-  , Dhall.SingleConstructor
-    { Dhall.typeName = "Command"
-    , Dhall.constructorName = "Command"
-    , Dhall.code = "(./Types.dhall).Command"
+    , Dhall.code  = "(./package.dhall).Start"
     }
   ]
 
@@ -58,11 +62,30 @@ deriving instance Generic NixEnv
 instance FromDhall NixEnv
 
 
-deriving instance Show Command
-deriving instance Eq Command
-deriving instance Ord Command
-deriving instance Generic Command
-instance FromDhall Command
+-- Command in Dhall has a church encoding because it has a recursive
+-- structure. Therefore, we define this type here. I hope we can make
+-- this work with the docs in the FromDhall about Functors and
+-- fixpoints.
+data Command
+  = Command
+    { name :: Text
+    , shortDesc :: Text
+    , start :: Start
+    , nixEnv :: Maybe NixEnv
+    , watchExtensions :: [Text]
+    , after :: [Command]
+    } deriving (Show)
+
+
+RSTH.makeBaseFunctor ''Command
+
+
+deriving instance Generic (CommandF a)
+deriving instance FromDhall a => FromDhall (CommandF a)
+
+
+convert :: Fix CommandF -> Command
+convert = Fix.cata RSFoldable.embed
 
 
 -- Instance allowing `cs` on lists and maybes of String, Text,
@@ -73,10 +96,11 @@ instance (Functor f, ConvertibleStrings a b) => ConvertibleStrings (f a) (f b) w
 
 main :: IO ()
 main = do
-  dhallCommands :: [Command] <- Dhall.input Dhall.auto "./Laps.dhall"
+  dhallCommands :: [Fix CommandF] <- Dhall.input Dhall.auto "./Laps.dhall"
 
   let
-    commands :: Map Text Command = Map.fromList $ fmap (\c -> (name c, c)) dhallCommands
+    commandsConverted :: [Command] = convert <$> dhallCommands
+    commands :: Map Text Command = Map.fromList $ fmap (\c -> (name c, c)) commandsConverted
 
   args :: [Text] <- cs <$> Env.getArgs
 
