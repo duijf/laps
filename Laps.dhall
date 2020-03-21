@@ -1,4 +1,4 @@
-let Types = ./Types.dhall
+let Types = ./package.dhall
 
 in  [ { name = "build"
       , shortDesc = "Build the project"
