@@ -12,8 +12,8 @@ import           Data.Fix (Fix (..))
 import qualified Data.Fix as Fix
 import qualified Data.Foldable as Foldable
 import           Data.Function ((&))
-import qualified Data.Functor.Foldable as RSFoldable
-import qualified Data.Functor.Foldable.TH as RSTH
+import           Data.Functor.Foldable (embed)
+import           Data.Functor.Foldable.TH (makeBaseFunctor)
 import qualified Data.List as List
 import           Data.Map.Strict (Map)
 import qualified Data.Map.Strict as Map
@@ -77,15 +77,11 @@ data Command
     } deriving (Show)
 
 
-RSTH.makeBaseFunctor ''Command
+makeBaseFunctor ''Command
 
 
 deriving instance Generic (CommandF a)
 deriving instance FromDhall a => FromDhall (CommandF a)
-
-
-convert :: Fix CommandF -> Command
-convert = Fix.cata RSFoldable.embed
 
 
 -- Instance allowing `cs` on lists and maybes of String, Text,
@@ -96,16 +92,18 @@ instance (Functor f, ConvertibleStrings a b) => ConvertibleStrings (f a) (f b) w
 
 main :: IO ()
 main = do
-  dhallCommands :: [Fix CommandF] <- Dhall.input Dhall.auto "./Laps.dhall"
+  commandsF :: [Fix CommandF] <- Dhall.input Dhall.auto "./Laps.dhall"
 
   let
-    commandsConverted :: [Command] = convert <$> dhallCommands
-    commands :: Map Text Command = Map.fromList $ fmap (\c -> (name c, c)) commandsConverted
+    -- Voodoo, but it seems to do it's job. I should really write out
+    -- whatever boilerplate this is abstracting for me though.
+    commands :: [Command] = Fix.cata embed <$> commandsF
+    commandsMap :: Map Text Command = Map.fromList $ fmap (\c -> (name c, c)) commands
 
   args :: [Text] <- cs <$> Env.getArgs
 
   when (length args == 0) (do
-    printHelp commands
+    printHelp commandsMap
     Exit.exitSuccess)
 
   when (length args > 1) (do
@@ -123,7 +121,7 @@ main = do
     Text.putStr "s\n"
     Exit.exitFailure)
 
-  Map.lookup (head args) commands & \case
+  Map.lookup (head args) commandsMap & \case
     Just command ->
       runCommand command
     Nothing -> do
@@ -133,7 +131,7 @@ main = do
       Text.putStr " defined in Laps.dhall.\n"
       printColor ANSI.Cyan " hint:"
       Text.putStr " Available commands are: "
-      Foldable.fold $ List.intersperse (Text.putStr ", ") $ printBold <$> (Map.keys commands)
+      Foldable.fold $ List.intersperse (Text.putStr ", ") $ printBold <$> (Map.keys commandsMap)
       Text.putStr "\n"
 
 
