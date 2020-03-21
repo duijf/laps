@@ -4,7 +4,7 @@ let nixEnv
     : Optional Laps.NixEnv
     = Some { srcFile = "default.nix", attr = None Text, clearEnv = False }
 
-in  [ Laps.Command.single
+in  [ Laps.Command.command
         { name = "build"
         , shortDesc = "Build the project"
         , start =
@@ -13,7 +13,7 @@ in  [ Laps.Command.single
         , watchExtensions = [ ".cabal", ".hs", ".dhall" ]
         , nixEnv = nixEnv
         }
-    , Laps.Command.single
+    , Laps.Command.command
         { name = "format"
         , shortDesc = "Autoformat all source code"
         , start =
