@@ -35,53 +35,49 @@ import           System.Process.Typed (ProcessConfig)
 import qualified System.Process.Typed as Process
 
 
-Dhall.makeHaskellTypes
-  [ Dhall.SingleConstructor
-    { Dhall.typeName = "NixEnv"
-    , Dhall.constructorName = "NixEnv"
-    , Dhall.code  = "(./package.dhall).NixEnv"
+data Executable
+  = Program
+    { program :: Text
+    , arguments :: [Text]
     }
-  , Dhall.MultipleConstructors
-    { Dhall.typeName = "Start"
-    , Dhall.code  = "(./package.dhall).Start"
+  | Script
+    { interpreter :: Text
+    , contents :: Text
     }
-  ]
 
 
-deriving instance Show Start
-deriving instance Eq Start
-deriving instance Ord Start
-deriving instance Generic Start
-instance FromDhall Start
+data NixEnv
+  = NixEnv
+    { srcFile :: Text
+    , attr :: Maybe Text
+    , clearEnv :: Bool
+    }
 
 
-deriving instance Show NixEnv
-deriving instance Eq NixEnv
-deriving instance Ord NixEnv
-deriving instance Generic NixEnv
-instance FromDhall NixEnv
-
-
--- Command in Dhall has a church encoding because it has a recursive
--- structure. Therefore, we define this type here. I hope we can make
--- this work with the docs in the FromDhall about Functors and
--- fixpoints.
-data Command
-  = Command
-    { name :: Text
-    , shortDesc :: Text
-    , start :: Start
+data Unit
+  = Unit
+    { executable :: Executable
+    , alias :: Text
     , nixEnv :: Maybe NixEnv
     , watchExtensions :: [Text]
-    , after :: [Command]
-    } deriving (Show)
+    }
 
 
-makeBaseFunctor ''Command
+-- Should we add a directed acyclic graph?
+data StartOrder a
+  = Single a
+  | Parallel [StartOrder a]
+  | Serial [StartOrder a]
+  | Tree Unit [StartOrder a]
+  deriving (Functor, Foldable, Traversable)
 
 
-deriving instance Generic (CommandF a)
-deriving instance FromDhall a => FromDhall (CommandF a)
+data Command
+  = Command
+  { name :: Text
+  , shortDesc :: Text
+  , startOrder :: StartOrder Unit
+  }
 
 
 -- Instance allowing `cs` on lists and maybes of String, Text,
@@ -92,18 +88,13 @@ instance (Functor f, ConvertibleStrings a b) => ConvertibleStrings (f a) (f b) w
 
 main :: IO ()
 main = do
-  commandsF :: [Fix CommandF] <- Dhall.input Dhall.auto "./Laps.dhall"
-
-  let
-    -- Voodoo, but it seems to do it's job. I should really write out
-    -- whatever boilerplate this is abstracting for me though.
-    commands :: [Command] = Fix.cata embed <$> commandsF
-    commandsMap :: Map Text Command = Map.fromList $ fmap (\c -> (name c, c)) commands
+  -- commands :: [Command] <- List.sortOn name <$> Dhall.input Dhall.auto "./Laps.dhall"
+  commands :: [Command] <- pure []
 
   args :: [Text] <- cs <$> Env.getArgs
 
   when (length args == 0) (do
-    printHelp commandsMap
+    printHelp commands
     Exit.exitSuccess)
 
   when (length args > 1) (do
@@ -121,9 +112,11 @@ main = do
     Text.putStr "s\n"
     Exit.exitFailure)
 
-  Map.lookup (head args) commandsMap & \case
+  List.find (\c -> name c == head args) commands & \case
     Just command ->
-      runCommand command
+      -- Does not do what we want yet: this just runs everything
+      -- in series while we wait for an actual implementation.
+      Foldable.traverse_ runUnit (startOrder command)
     Nothing -> do
       printColor ANSI.Red "error:"
       Text.putStr " No command "
@@ -131,7 +124,7 @@ main = do
       Text.putStr " defined in Laps.dhall.\n"
       printColor ANSI.Cyan " hint:"
       Text.putStr " Available commands are: "
-      Foldable.fold $ List.intersperse (Text.putStr ", ") $ printBold <$> (Map.keys commandsMap)
+      Foldable.fold $ List.intersperse (Text.putStr ", ") $ printBold <$> name <$> commands
       Text.putStr "\n"
 
 
@@ -149,7 +142,7 @@ printBold t = do
   ANSI.setSGR [ANSI.Reset]
 
 
-printHelp :: Map Text Command -> IO ()
+printHelp :: [Command] -> IO ()
 printHelp commands = do
   Text.putStrLn "Laps - Project automation\n"
   Text.putStr "Define commands in "
@@ -172,9 +165,9 @@ printCommand command = do
   Text.putStrLn (shortDesc command)
 
 
-getCommandProgAndArgs :: Command -> IO (String, [String], Maybe FilePath)
-getCommandProgAndArgs command = do
-  (prog, args, tempScript) <- case start command of
+getCommandProgAndArgs :: Unit -> IO (String, [String], Maybe FilePath)
+getCommandProgAndArgs unit = do
+  (prog, args, tempScript) <- case executable unit of
     Script{interpreter, contents} -> do
       path <- writeScript interpreter contents
       pure (path, [], Just path)
@@ -182,12 +175,12 @@ getCommandProgAndArgs command = do
     Program{program, arguments} -> pure (cs $ program, cs $ arguments, Nothing)
 
   let
-    watchExec = case watchExtensions command of
+    watchExec = case watchExtensions unit of
       [] -> []
       exts -> ["watchexec", "--exts", Foldable.fold $ List.intersperse "," $ cs $ exts, "--"]
 
   pure $
-    case nixEnv command of
+    case nixEnv unit of
       Just (env) -> ("nix", ["run", "-f", cs $ srcFile env, "-c"] ++ watchExec ++ [prog] ++ args, tempScript)
       Nothing -> (prog, args, tempScript)
 
@@ -207,9 +200,9 @@ writeScript interpreter contents = do
   pure $ path
 
 
-runCommand :: Command -> IO ()
-runCommand command = do
-  (prog, args, tempScript) <- getCommandProgAndArgs command
+runUnit :: Unit -> IO ()
+runUnit unit = do
+  (prog, args, tempScript) <- getCommandProgAndArgs unit
   () <$ (Process.runProcess $ Process.proc prog args)
 
   -- Clean up temporary script if it exists.
