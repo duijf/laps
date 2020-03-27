@@ -16,7 +16,11 @@ let -- We want users to be able to specify a tree of commands to execute.
     -- let Tree : Type = { n : Natural, children : Tree } in Tree`
     -- ```
     --
-    -- So we resort to some fancy things. This is called a Church encoding.
+    -- So we resort to some fancy things. This is called a Boehm-Berarducci
+    -- encoding. This is a typed variant of Church encoding.
+    --
+    -- Gabriel has a nice blogpost explaining how this works in a Dhall's
+    -- precursors: http://www.haskellforall.com/2016/04/data-is-code.html
     Command
     : Type
     =     forall (Command : Type)
