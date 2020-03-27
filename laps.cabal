@@ -20,7 +20,10 @@ executable laps
     unix
   default-language:    Haskell2010
   default-extensions:
+    DeriveFoldable,
+    DeriveFunctor,
     DeriveGeneric,
+    DeriveTraversable,
     FlexibleContexts,
     FlexibleInstances,
     LambdaCase,
