@@ -1,3 +1,5 @@
+let Prelude = https://prelude.dhall-lang.org/v15.0.0/package.dhall
+
 let NixEnv
     : Type
     = { srcFile : Text, attr : Optional Text, clearEnv : Bool }
@@ -58,6 +60,65 @@ let single
             )
       ->  startOrder.single unit
 
+let parallel
+    : List StartOrder -> StartOrder
+    =     \(nested : List StartOrder)
+      ->  \(StartOrder : Type)
+      ->  \ ( startOrder
+            : { single : Unit -> StartOrder
+              , parallel : List StartOrder -> StartOrder
+              , serial : List StartOrder -> StartOrder
+              , tree : Unit -> List StartOrder -> StartOrder
+              }
+            )
+      ->  startOrder.parallel
+            ( Prelude.List.map
+                StartOrder@1
+                StartOrder
+                (\(so : StartOrder@1) -> so StartOrder startOrder)
+                nested
+            )
+
+let serial
+    : List StartOrder -> StartOrder
+    =     \(nested : List StartOrder)
+      ->  \(StartOrder : Type)
+      ->  \ ( startOrder
+            : { single : Unit -> StartOrder
+              , parallel : List StartOrder -> StartOrder
+              , serial : List StartOrder -> StartOrder
+              , tree : Unit -> List StartOrder -> StartOrder
+              }
+            )
+      ->  startOrder.serial
+            ( Prelude.List.map
+                StartOrder@1
+                StartOrder
+                (\(so : StartOrder@1) -> so StartOrder startOrder)
+                nested
+            )
+
+let tree
+    : Unit -> List StartOrder -> StartOrder
+    =     \(unit : Unit)
+      ->  \(nested : List StartOrder)
+      ->  \(StartOrder : Type)
+      ->  \ ( startOrder
+            : { single : Unit -> StartOrder
+              , parallel : List StartOrder -> StartOrder
+              , serial : List StartOrder -> StartOrder
+              , tree : Unit -> List StartOrder -> StartOrder
+              }
+            )
+      ->  startOrder.tree
+            unit
+            ( Prelude.List.map
+                StartOrder@1
+                StartOrder
+                (\(so : StartOrder@1) -> so StartOrder startOrder)
+                nested
+            )
+
 in  { Command = Command
     , NixEnv = NixEnv
     , Executable = Executable
@@ -66,4 +127,6 @@ in  { Command = Command
     , program = Executable.Program
     , script = Executable.Script
     , single = single
+    , serial = serial
+    , parallel = parallel
     }
