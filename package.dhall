@@ -2,11 +2,19 @@ let NixEnv
     : Type
     = { srcFile : Text, attr : Optional Text, clearEnv : Bool }
 
-let Start
+let Executable
     : Type
     = < Program : { program : Text, arguments : List Text }
       | Script : { interpreter : Text, contents : Text }
       >
+
+let Unit
+    : Type
+    = { executable : Executable
+      , alias : Text
+      , nixEnv : Optional NixEnv
+      , watchExtensions : List Text
+      }
 
 let -- We want users to be able to specify a tree of commands to execute.
     -- Trees are a recursive datatype. However, Dhall does not allow this
@@ -21,78 +29,41 @@ let -- We want users to be able to specify a tree of commands to execute.
     --
     -- Gabriel has a nice blogpost explaining how this works in a Dhall's
     -- precursors: http://www.haskellforall.com/2016/04/data-is-code.html
-    Command
+    StartOrder
     : Type
-    =     forall (Command : Type)
-      ->  forall  ( Make
-                  :     { nameF : Text
-                        , shortDescF : Text
-                        , startF : Start
-                        , nixEnvF : Optional NixEnv
-                        , watchExtensionsF : List Text
-                        , afterF : List Command
-                        }
-                    ->  Command
+    =     forall (StartOrder : Type)
+      ->  forall  ( startOrder
+                  : { single : Unit -> StartOrder
+                    , parallel : List StartOrder -> StartOrder
+                    , serial : List StartOrder -> StartOrder
+                    , tree : Unit -> List StartOrder -> StartOrder
+                    }
                   )
-      ->  Command
+      ->  StartOrder
 
-let command
-    :     { name : Text
-          , shortDesc : Text
-          , start : Start
-          , nixEnv : Optional NixEnv
-          , watchExtensions : List Text
-          }
-      ->  Command
-    =     \ ( args
-            : { name : Text
-              , shortDesc : Text
-              , start : Start
-              , nixEnv : Optional NixEnv
-              , watchExtensions : List Text
+let Command
+    : Type
+    = { name : Text, shortDesc : Text, startOrder : StartOrder }
+
+let single
+    : Unit -> StartOrder
+    =     \(unit : Unit)
+      ->  \(StartOrder : Type)
+      ->  \ ( startOrder
+            : { single : Unit -> StartOrder
+              , parallel : List StartOrder -> StartOrder
+              , serial : List StartOrder -> StartOrder
+              , tree : Unit -> List StartOrder -> StartOrder
               }
             )
-      ->  \(Command : Type)
-      ->  \ ( Make
-            :     { nameF : Text
-                  , shortDescF : Text
-                  , startF : Start
-                  , nixEnvF : Optional NixEnv
-                  , watchExtensionsF : List Text
-                  , afterF : List Command
-                  }
-              ->  Command
-            )
-      ->  Make
-            { nameF = args.name
-            , shortDescF = args.shortDesc
-            , startF = args.start
-            , nixEnvF = args.nixEnv
-            , watchExtensionsF = args.watchExtensions
-            , afterF = [] : List Command
-            }
+      ->  startOrder.single unit
 
-let -- Simplest possible command so users can get started quickly.
-    simple
-    : { name : Text, shortDesc : Text, start : Start } -> Command
-    =     \(args : { name : Text, shortDesc : Text, start : Start })
-      ->  \(Command : Type)
-      ->  \ ( Make
-            :     { nameF : Text
-                  , shortDescF : Text
-                  , startF : Start
-                  , nixEnvF : Optional NixEnv
-                  , watchExtensionsF : List Text
-                  , afterF : List Command
-                  }
-              ->  Command
-            )
-      ->  command
-            (args /\ { nixEnv = None NixEnv, watchExtensions = [] : List Text })
-            Command
-            Make
-
-in  { Command = { Type = Command, command = command, simple = simple }
+in  { Command = Command
     , NixEnv = NixEnv
-    , Start = Start
+    , Executable = Executable
+    , Unit = Unit
+    , StartOrder = StartOrder
+    , program = Executable.Program
+    , script = Executable.Script
+    , single = single
     }
