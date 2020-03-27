@@ -26,6 +26,7 @@ executable laps
     DeriveTraversable,
     FlexibleContexts,
     FlexibleInstances,
+    InstanceSigs,
     LambdaCase,
     MultiParamTypeClasses,
     NamedFieldPuns,

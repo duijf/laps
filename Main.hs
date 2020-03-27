@@ -38,6 +38,24 @@ data Executable
     , contents :: Text
     }
 
+instance FromDhall Executable where
+  autoWith :: Dhall.InterpretOptions -> Dhall.Decoder Executable
+  autoWith _ = Dhall.union $
+    Dhall.constructor "Program"
+      ( Dhall.record
+        ( Program
+          <$> Dhall.field "program" Dhall.strictText
+          <*> Dhall.field "arguments" (Dhall.list Dhall.strictText)
+        )
+      ) <>
+    Dhall.constructor "Script"
+      ( Dhall.record
+        ( Script
+          <$> Dhall.field "interpreter" Dhall.strictText
+          <*> Dhall.field "contents" Dhall.strictText
+        )
+      )
+
 
 data NixEnv
   = NixEnv
@@ -45,6 +63,14 @@ data NixEnv
     , attr :: Maybe Text
     , clearEnv :: Bool
     }
+
+instance FromDhall NixEnv where
+  autoWith :: Dhall.InterpretOptions -> Dhall.Decoder NixEnv
+  autoWith _ = Dhall.record $
+    NixEnv
+      <$> Dhall.field "srcFile" Dhall.strictText
+      <*> Dhall.field "attr" (Dhall.maybe Dhall.strictText)
+      <*> Dhall.field "clearEnv" Dhall.bool
 
 
 data Unit
@@ -54,6 +80,15 @@ data Unit
     , nixEnv :: Maybe NixEnv
     , watchExtensions :: [Text]
     }
+
+instance FromDhall Unit where
+  autoWith :: Dhall.InterpretOptions -> Dhall.Decoder Unit
+  autoWith opts = Dhall.record $
+    Unit
+      <$> Dhall.field "executable" (Dhall.autoWith opts)
+      <*> Dhall.field "alias" Dhall.strictText
+      <*> Dhall.field "nixEnv" (Dhall.maybe (Dhall.autoWith opts))
+      <*> Dhall.field "watchExtensions" (Dhall.list Dhall.strictText)
 
 
 -- Should we add a directed acyclic graph?
