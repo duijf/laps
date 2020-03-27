@@ -15,11 +15,13 @@ executable laps
     dhall,
     recursion-schemes,
     string-conversions,
+    template-haskell,
     text,
     typed-process,
     unix
   default-language:    Haskell2010
   default-extensions:
+    DeriveAnyClass,
     DeriveFoldable,
     DeriveFunctor,
     DeriveGeneric,

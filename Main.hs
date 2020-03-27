@@ -1,3 +1,5 @@
+{-# LANGUAGE TemplateHaskell #-}
+
 module Main where
 
 import           Control.Monad (when)
@@ -14,8 +16,11 @@ import           Data.String.Conversions (ConvertibleStrings (..), cs)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
+import           Data.Void (Void)
 import           Dhall (FromDhall, ToDhall)
 import qualified Dhall
+import qualified Dhall.Core as Core
+import qualified Dhall.Src as Core
 import qualified Dhall.TH as Dhall
 import           GHC.Generics (Generic)
 import qualified System.Console.ANSI as ANSI
@@ -26,6 +31,9 @@ import qualified System.Posix.Files as Files
 import qualified System.Posix.Temp as Temp
 import           System.Process.Typed (ProcessConfig)
 import qualified System.Process.Typed as Process
+
+-- TODO: Remove.
+import           Debug.Trace (traceShowId)
 
 
 data Executable
@@ -91,7 +99,11 @@ instance FromDhall Unit where
       <*> Dhall.field "watchExtensions" (Dhall.list Dhall.strictText)
 
 
--- Should we add a directed acyclic graph?
+-- We have the type parameter `a`, because we want to derive the useful
+-- functor, foldable, and traversable instances. In practice, we only ever
+-- have values of type `StartOrder Unit`.
+--
+-- Later, I want to add a directed acyclic graph here as well.
 data StartOrder a
   = Single a
   | Parallel [StartOrder a]
@@ -99,13 +111,34 @@ data StartOrder a
   | Tree Unit [StartOrder a]
   deriving (Functor, Foldable, Traversable)
 
+startOrderDecoder :: (FromDhall a) => Dhall.InterpretOptions -> Dhall.Decoder (StartOrder a)
+startOrderDecoder opts = Dhall.Decoder extract expected
+  where
+    -- This partial function is safe, because Dhall checks the type of the
+    -- expression that we're extracting from before calling `extract`.
+    extract :: (FromDhall a) => Core.Expr Core.Src Void -> Dhall.Extractor Core.Src Void (StartOrder a)
+    extract (Core.Lam _ _ (Core.Lam _ _ (Core.App field value))) = case field of
+      (Core.Field _ "single") -> Single <$> Dhall.extract (Dhall.autoWith opts) value
+
+      -- Haven't implemented these in package.dhall yet. Will do that first so
+      -- we can use the Show representation to make our life easier.
+      (Core.Field _ "parallel") -> Dhall.typeError expected $ traceShowId value
+      (Core.Field _ "serial") -> Dhall.typeError expected $ traceShowId value
+      (Core.Field _ "tree") -> Dhall.typeError expected $ traceShowId value
+
+    expected :: Core.Expr Core.Src Void
+    expected = $(Dhall.staticDhallExpression "(./package.dhall).StartOrder")
+
+instance (FromDhall a) => FromDhall (StartOrder a) where
+  autoWith opts = startOrderDecoder opts
+
 
 data Command
   = Command
   { name :: Text
   , shortDesc :: Text
   , startOrder :: StartOrder Unit
-  }
+  } deriving (Generic, FromDhall)
 
 
 -- Instance allowing `cs` on lists and maybes of String, Text,
@@ -116,8 +149,7 @@ instance (Functor f, ConvertibleStrings a b) => ConvertibleStrings (f a) (f b) w
 
 main :: IO ()
 main = do
-  -- commands :: [Command] <- List.sortOn name <$> Dhall.input Dhall.auto "./Laps.dhall"
-  commands :: [Command] <- pure []
+  commands :: [Command] <- List.sortOn name <$> Dhall.input Dhall.auto "./Laps.dhall"
 
   args :: [Text] <- cs <$> Env.getArgs
 
