@@ -12,6 +12,6 @@
   # There are no guarantees about compatibility of `laps.nix` with
   # sources from arbitrary previous commits.
   laps-dev = pkgs.haskellPackages.callPackage ./nix/laps.nix {
-    gitRev = "e83449793845820821677b84f0a3078ca771e10b";
+    gitRev = "9fd36fbc62e8479ee0e498fd40502e2560c5a131";
   };
 }

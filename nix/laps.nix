@@ -27,7 +27,7 @@ mkDerivation {
           # We cannot use `url = ../.;`. That makes Nix complain.
           url = "https://github.com/duijf/laps.git";
           name = "laps-git";
-          ref = "haskell";
+          ref = "master";
           rev = gitRev;
         };
     in
