@@ -13,7 +13,7 @@ common release
   ghc-options: -Werror
 
 common sanity
-  default-lanaguage: Haskell2010
+  default-language: Haskell2010
   ghc-options:
     -Wall
     -Wincomplete-record-updates
