@@ -108,6 +108,30 @@ data StartOrder a
   | Tree Unit [StartOrder a]
   deriving (Functor, Foldable, Traversable)
 
+-- Decode a `StartOrder a` from the Boehm-Berarducci encoded Dhall version.
+--
+-- See the `StartOrder` type in `package.dhall` to see the type of this
+-- expression. Here, we walk the Dhall tree for values of this type and
+-- pass these to our Haskell constructors for `StartOrder`.
+--
+-- This code uses some Dhall internals. There is also a version of this code
+-- that can be derived with Data.Fix and the `recursion-schemes` package. The
+-- documentation for the `FromDhall (Fix f)` instance contains an example.
+--
+-- I wanted to write this myself to get an idea about what's involved in
+-- rolling your own.
+--
+-- Benefits of writing our own instances:
+--
+--  - We decouple field names in the Dhall representation from field names in
+--    the Haskell representation. This means we don't impose the limits of the
+--    Haskell record situation on the Dhall code.
+--  - Build: We do not have to depend on `recursion-schemes`.
+--
+-- Downsides:
+--
+--  - The serialization code is dense to read, boring to write, and tricky to
+--    get right.
 startOrderDecoder :: (FromDhall a) => Dhall.InterpretOptions -> Dhall.Decoder (StartOrder a)
 startOrderDecoder opts = Dhall.Decoder extract expected
   where
@@ -145,7 +169,8 @@ startOrderDecoder opts = Dhall.Decoder extract expected
                <*> traverse extract (Foldable.toList list)
 
         -- If our code is correct, this branch should never match. You can
-        -- uncomment to help with debugging.
+        -- uncomment to help with debugging. Be sure to also:
+        -- import Debug.Pretty.Simple (pTraceShowId)
         -- actual -> Dhall.typeError expected (pTraceShowId actual)
 
     expected :: Core.Expr Core.Src Void
