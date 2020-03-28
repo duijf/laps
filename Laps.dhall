@@ -15,6 +15,35 @@ in  [ { name = "build"
             , alias = "cabal"
             }
       }
+    , { name = "typecheck"
+      , shortDesc = "Typecheck files"
+      , startOrder =
+          Laps.parallel
+            [ Laps.single
+                { alias = "dhall"
+                , executable =
+                    Laps.program
+                      { program = "dhall"
+                      , arguments = [ "--ascii", "--file", "package.dhall" ]
+                      }
+                , nixEnv = nixEnv
+                , watchExtensions = [] : List Text
+                }
+            , Laps.single
+                { alias = "haskell"
+                , executable =
+                    Laps.program
+                      { program = "cabal"
+                      , arguments =
+                        [ "build"
+                        , "--ghc-options=\"-fforce-recomp -fno-code\""
+                        ]
+                      }
+                , nixEnv = nixEnv
+                , watchExtensions = [] : List Text
+                }
+            ]
+      }
     , { name = "format"
       , shortDesc = "Autoformat all source code"
       , startOrder =
