@@ -37,13 +37,7 @@ common sanity
     StandaloneDeriving,
     TypeApplications
 
-executable laps
-  import: sanity
-
-  if flag(release)
-    import: release
-
-  main-is: Main.hs
+common deps
   build-depends:
     ansi-terminal,
     base,
@@ -56,3 +50,20 @@ executable laps
     text,
     typed-process,
     unix
+
+library
+  import: deps, sanity
+  hs-source-dirs: src
+  exposed-modules:
+    OrphanInstances
+
+executable laps
+  import: deps, sanity
+
+  if flag(release)
+    import: release
+
+  main-is: Main.hs
+
+  build-depends:
+    laps

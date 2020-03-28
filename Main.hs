@@ -6,7 +6,7 @@ import           Control.Monad (when)
 import qualified Data.Foldable as Foldable
 import           Data.Function ((&))
 import qualified Data.List as List
-import           Data.String.Conversions (ConvertibleStrings (..), cs)
+import           Data.String.Conversions (cs)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
@@ -23,6 +23,8 @@ import qualified System.Posix.Env.ByteString as Env
 import qualified System.Posix.Files as Files
 import qualified System.Posix.Temp as Temp
 import qualified System.Process.Typed as Process
+
+import           OrphanInstances ()
 
 
 data Program
@@ -190,12 +192,6 @@ instance FromDhall Command where
       <$> Dhall.field "name" Dhall.strictText
       <*> Dhall.field "shortDesc" Dhall.strictText
       <*> Dhall.field "startOrder" Dhall.auto
-
-
--- Instance allowing `cs` on lists and maybes of String, Text,
--- ByteString, etc.
-instance (Functor f, ConvertibleStrings a b) => ConvertibleStrings (f a) (f b) where
-  convertString = fmap cs
 
 
 main :: IO ()
