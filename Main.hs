@@ -181,7 +181,7 @@ data Command
   }
 
 instance FromDhall Command where
-  autoWith opts = Dhall.record $
+  autoWith _opts = Dhall.record $
     Command
       <$> Dhall.field "name" Dhall.strictText
       <*> Dhall.field "shortDesc" Dhall.strictText
