@@ -185,7 +185,14 @@ data Command
   { name :: Text
   , shortDesc :: Text
   , startOrder :: StartOrder Unit
-  } deriving (Generic, FromDhall)
+  }
+
+instance FromDhall Command where
+  autoWith opts = Dhall.record $
+    Command
+      <$> Dhall.field "name" Dhall.strictText
+      <*> Dhall.field "shortDesc" Dhall.strictText
+      <*> Dhall.field "startOrder" Dhall.auto
 
 
 -- Instance allowing `cs` on lists and maybes of String, Text,
