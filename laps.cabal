@@ -4,6 +4,14 @@ version:             0.0.1.0-unreleased
 author:              Laurens Duijvesteijn
 maintainer:          git@duijf.io
 
+flag release
+  description: Release build?
+  default: False
+  Manual: True
+
+common release
+  ghc-options: -Werror
+
 common sanity
   default-lanaguage: Haskell2010
   ghc-options:
@@ -31,6 +39,10 @@ common sanity
 
 executable laps
   import: sanity
+
+  if flag(release)
+    import: release
+
   main-is: Main.hs
   build-depends:
     ansi-terminal,
