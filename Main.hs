@@ -32,9 +32,6 @@ import qualified System.Posix.Temp as Temp
 import           System.Process.Typed (ProcessConfig)
 import qualified System.Process.Typed as Process
 
--- TODO: Remove.
-import           Debug.Pretty.Simple (pTraceShowId)
-
 
 data Executable
   = Program
@@ -116,9 +113,15 @@ startOrderDecoder opts = Dhall.Decoder extract expected
   where
     extract :: (FromDhall a) => Core.Expr Core.Src Void -> Dhall.Extractor Core.Src Void (StartOrder a)
     extract expr =
+      -- Partial case expressions are safe when: the code here is correct,
+      -- and Dhall's typechecker is correct. This is tricky to write and
+      -- modify though, so beware.
       case expr of
+        -- Get rid of the outer lambdas to get to the real structure.
         (Core.Lam _ _ (Core.Lam _ _ inner)) -> extract inner
-        (Core.App field value) ->
+
+        -- Cases for Single, Paralle, and Serial.
+        (Core.App field@(Core.Field _ _) value) ->
           case (field, value) of
             (Core.Field _ "single", value) ->
               -- Leaf of the recursive structure. Dispatch to `FromDhall a`.
@@ -130,11 +133,20 @@ startOrderDecoder opts = Dhall.Decoder extract expected
             (Core.Field _ "serial", Core.ListLit _ list) ->
               Serial <$> traverse extract (Foldable.toList list)
 
-            (Core.Field _ "tree", value) -> Dhall.typeError expected $ pTraceShowId value
+        -- Because `App` is left associative in the AST, the AST function is
+        -- 'inside out' for `Unit -> List StartOrder -> StartOrder`. It has
+        -- this structure:
+        --
+        -- App (App `treeField` `recordLit`) `nestedStartOrder`
+        --                      ^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^
+        --                       Unit         List StartOrder
+        (Core.App (Core.App (Core.Field _ "tree") (value)) (Core.ListLit _ list)) ->
+          Tree <$> Dhall.extract (Dhall.autoWith opts) value
+               <*> traverse extract (Foldable.toList list)
 
-            (field, value) -> Dhall.typeError expected (Core.App field value)
-
-        actual -> Dhall.typeError expected actual
+        -- If our code is correct, this branch should never match. You can
+        -- uncomment to help with debugging.
+        -- actual -> Dhall.typeError expected (pTraceShowId actual)
 
     expected :: Core.Expr Core.Src Void
     expected = $(Dhall.staticDhallExpression "(./package.dhall).StartOrder")
