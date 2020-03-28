@@ -1,6 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
-
-module Main where
+module Laps where
 
 import           Control.Monad (when)
 import qualified Data.Foldable as Foldable

@@ -55,6 +55,7 @@ library
   import: deps, sanity
   hs-source-dirs: src
   exposed-modules:
+    Laps,
     OrphanInstances
 
 executable laps
@@ -63,7 +64,7 @@ executable laps
   if flag(release)
     import: release
 
-  main-is: Main.hs
+  main-is: src/Main.hs
 
   build-depends:
     laps
