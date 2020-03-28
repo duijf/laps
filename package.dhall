@@ -1,4 +1,27 @@
-let Prelude = https://prelude.dhall-lang.org/v15.0.0/package.dhall
+let -- Taken from the Prelude because of build problems.
+    --
+    -- In a Nix sandbox, we do not have network access. That means that our
+    -- Nix builds aren't going to work if we import the Prelude from the
+    -- internet.
+    --
+    -- We need to import `package.dhall` into Haskell because we do not want
+    -- to duplicate the types in here as well.
+    --
+    -- Nix's fetchGit doesn't support git submodules. Therefore, we cannot
+    -- easily add dhall-lang/dhall-lang as a submodule of this repository
+    -- and still have our Nix derivations work.
+    map
+    : forall (a : Type) -> forall (b : Type) -> (a -> b) -> List a -> List b
+    =     \(a : Type)
+      ->  \(b : Type)
+      ->  \(f : a -> b)
+      ->  \(xs : List a)
+      ->  List/build
+            b
+            (     \(list : Type)
+              ->  \(cons : b -> list -> list)
+              ->  List/fold a xs list (\(x : a) -> cons (f x))
+            )
 
 let NixEnv
     : Type
@@ -72,7 +95,7 @@ let parallel
               }
             )
       ->  startOrder.parallel
-            ( Prelude.List.map
+            ( map
                 StartOrder@1
                 StartOrder
                 (\(so : StartOrder@1) -> so StartOrder startOrder)
@@ -91,7 +114,7 @@ let serial
               }
             )
       ->  startOrder.serial
-            ( Prelude.List.map
+            ( map
                 StartOrder@1
                 StartOrder
                 (\(so : StartOrder@1) -> so StartOrder startOrder)
@@ -112,7 +135,7 @@ let tree
             )
       ->  startOrder.tree
             unit
-            ( Prelude.List.map
+            ( map
                 StartOrder@1
                 StartOrder
                 (\(so : StartOrder@1) -> so StartOrder startOrder)
