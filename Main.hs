@@ -25,28 +25,32 @@ import qualified System.Posix.Temp as Temp
 import qualified System.Process.Typed as Process
 
 
-data Executable
+data Program
   = Program
     { program :: Text
     , arguments :: [Text]
     }
-  | Script
+
+data Script
+  = Script
     { interpreter :: Text
     , contents :: Text
     }
+
+data Executable = S Script | P Program
 
 instance FromDhall Executable where
   autoWith :: Dhall.InterpretOptions -> Dhall.Decoder Executable
   autoWith _ = Dhall.union $
     Dhall.constructor "Program"
-      ( Dhall.record
+      ( Dhall.record $ P <$>
         ( Program
           <$> Dhall.field "program" Dhall.strictText
           <*> Dhall.field "arguments" (Dhall.list Dhall.strictText)
         )
       ) <>
     Dhall.constructor "Script"
-      ( Dhall.record
+      ( Dhall.record $ S <$>
         ( Script
           <$> Dhall.field "interpreter" Dhall.strictText
           <*> Dhall.field "contents" Dhall.strictText
@@ -275,11 +279,11 @@ printCommand command = do
 getCommandProgAndArgs :: Unit -> IO (String, [String], Maybe FilePath)
 getCommandProgAndArgs unit = do
   (prog, args, tempScript) <- case executable unit of
-    Script{interpreter, contents} -> do
+    (S Script{interpreter, contents}) -> do
       path <- writeScript interpreter contents
       pure (path, [], Just path)
 
-    Program{program, arguments} -> pure (cs $ program, cs $ arguments, Nothing)
+    (P Program{program, arguments}) -> pure (cs $ program, cs $ arguments, Nothing)
 
   let
     watchExec = case watchExtensions unit of
