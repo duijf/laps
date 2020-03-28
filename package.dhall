@@ -129,4 +129,5 @@ in  { Command = Command
     , single = single
     , serial = serial
     , parallel = parallel
+    , tree = tree
     }
