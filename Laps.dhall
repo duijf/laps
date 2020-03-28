@@ -1,20 +1,43 @@
+let Prelude = https://prelude.dhall-lang.org/v15.0.0/package.dhall
+
 let Laps = ./package.dhall
 
 let nixEnv
     : Optional Laps.NixEnv
     = Some { srcFile = "default.nix", attr = None Text, clearEnv = False }
 
-in  [ { name = "build"
-      , shortDesc = "Build the project"
-      , startOrder =
-          Laps.single
-            { executable =
-                Laps.program { program = "cabal", arguments = [ "new-build" ] }
-            , watchExtensions = [ ".cabal", ".hs", ".dhall" ]
-            , nixEnv = nixEnv
-            , alias = "cabal"
-            }
-      }
+let build
+    : Bool -> Laps.Command
+    =     \(release : Bool)
+      ->  { name =
+              Prelude.Text.concat [ "build", if release then "-rel" else "" ]
+          , shortDesc =
+              Prelude.Text.concat
+                [ "Build the project", if release then " (release)" else "" ]
+          , startOrder =
+              Laps.single
+                { executable =
+                    Laps.program
+                      { program = "cabal"
+                      , arguments =
+                          Prelude.List.concat
+                            Text
+                            [ [ "new-build" ]
+                            ,       if release
+
+                              then  [ "-frelease" ]
+
+                              else  [] : List Text
+                            ]
+                      }
+                , watchExtensions = [ ".cabal", ".hs", ".dhall" ]
+                , nixEnv = nixEnv
+                , alias = "cabal"
+                }
+          }
+
+in  [ build True
+    , build False
     , { name = "typecheck"
       , shortDesc = "Typecheck files"
       , startOrder =
