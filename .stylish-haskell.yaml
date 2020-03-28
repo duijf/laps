@@ -1,0 +1,74 @@
+# Configuration for Stylish Haskell.
+#
+#  1. Leave most source code alone. The formatting that the user gave
+#     is probably what they intended. Fighting with an auto-formatter
+#     is never fun.
+#  2. Automate tedious things that we pretty much always want. How
+#     we do imports, line feeds, indentation and trailing whitespace.
+#  3. Almost always prefer formatting that minimizes diffs under future
+#     edits. Aligning things for the sake of aligning them blows up diffs
+#     and makes code reviews unbearable and git diff useless.
+#
+# Hopefully these settings don't get in the way.
+
+steps:
+  - imports:
+      # -- Always indent imports the full length of `qualified` for
+      # -- all import blocks in the file.
+      # import           Data.Foo
+      # import qualified Data.Map as Map
+      align: global
+
+      # -- Keep import lists formatted like this when they are small.
+      # import qualified Data.List as List (concat, foldl, foldr)
+      list_align: with_alias
+
+      # -- Turn them into this when they grow too large to fit a single line.
+      # import qualified Data.Map as M
+      #                    ( empty
+      #                    , singleton
+      #                    , ...
+      #                    , delete
+      #                    )
+      long_list_align: multiline
+      list_padding: 19
+
+      # -- True
+      # import qualified Data.List       as List
+      # import qualified Data.List.Extra as List
+      #
+      # -- False
+      # import qualified Data.List as List
+      # import qualified Data.List.Extra as List
+      pad_module_names: false
+
+      # -- True
+      # import           Data.Foldable (Foldable (fold, foldl, foldMap))
+      #
+      # -- False
+      # import           Data.Foldable (Foldable(fold, foldl, foldMap))
+      separate_lists: true
+
+      # -- True
+      # import           Data.Foo ( foo )
+      #
+      # -- False
+      # import           Data.Foo (foo)
+      space_surround: false
+
+  # Format language pragmas with minimal diff impact:
+  # {-# LANGUAGE OverloadedStrings #-}
+  # {-# LANGUAGE TypeApplications #-}
+  - language_pragmas:
+      style: vertical
+      align: false
+
+  # Remove trailing whitespace
+  - trailing_whitespace: {}
+
+indent: 2
+columns: 80
+newline: lf
+
+# Find default language extensions from Cabal file.
+cabal: true

@@ -1,10 +1,19 @@
+{ pkgs ?  (import ./nix/nixpkgs.nix {})
+}:
+
+with pkgs;
+
 let
-  pkgs = import ./nix/nixpkgs.nix {};
+  ghc = haskellPackages.ghcWithPackages (import ./nix/haskell-deps.nix);
+  release = (import ./release.nix) { inherit pkgs; };
 in
-  pkgs.buildEnv {
+  buildEnv {
     name = "laps-devenv";
     paths = [
-      pkgs.cargo
-      pkgs.gcc
+      cabal-install
+      ghc
+      release.laps-dev
+      stylish-haskell
+      watchexec
     ];
   }
