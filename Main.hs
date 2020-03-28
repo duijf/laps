@@ -139,7 +139,7 @@ startOrderDecoder opts = Dhall.Decoder extract expected
         -- Cases for Single, Paralle, and Serial.
         (Core.App field@(Core.Field _ _) value) ->
           case (field, value) of
-            (Core.Field _ "single", value) ->
+            (Core.Field _ "single", _) ->
               -- Leaf of the recursive structure. Dispatch to `FromDhall a`.
               Single <$> Dhall.extract (Dhall.autoWith opts) value
 
