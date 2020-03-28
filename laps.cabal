@@ -1,3 +1,4 @@
+cabal-version:       >=1.10
 name:                laps
 version:             0.0.1.0-unreleased
 author:              Laurens Duijvesteijn
