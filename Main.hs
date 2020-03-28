@@ -33,7 +33,7 @@ import           System.Process.Typed (ProcessConfig)
 import qualified System.Process.Typed as Process
 
 -- TODO: Remove.
-import           Debug.Trace (traceShowId)
+import           Debug.Pretty.Simple (pTraceShowId)
 
 
 data Executable
@@ -114,17 +114,27 @@ data StartOrder a
 startOrderDecoder :: (FromDhall a) => Dhall.InterpretOptions -> Dhall.Decoder (StartOrder a)
 startOrderDecoder opts = Dhall.Decoder extract expected
   where
-    -- This partial function is safe, because Dhall checks the type of the
-    -- expression that we're extracting from before calling `extract`.
     extract :: (FromDhall a) => Core.Expr Core.Src Void -> Dhall.Extractor Core.Src Void (StartOrder a)
-    extract (Core.Lam _ _ (Core.Lam _ _ (Core.App field value))) = case field of
-      (Core.Field _ "single") -> Single <$> Dhall.extract (Dhall.autoWith opts) value
+    extract expr =
+      case expr of
+        (Core.Lam _ _ (Core.Lam _ _ inner)) -> extract inner
+        (Core.App field value) ->
+          case (field, value) of
+            (Core.Field _ "single", value) ->
+              -- Leaf of the recursive structure. Dispatch to `FromDhall a`.
+              Single <$> Dhall.extract (Dhall.autoWith opts) value
 
-      -- Haven't implemented these in package.dhall yet. Will do that first so
-      -- we can use the Show representation to make our life easier.
-      (Core.Field _ "parallel") -> Dhall.typeError expected $ traceShowId value
-      (Core.Field _ "serial") -> Dhall.typeError expected $ traceShowId value
-      (Core.Field _ "tree") -> Dhall.typeError expected $ traceShowId value
+            (Core.Field _ "parallel", Core.ListLit _ list) ->
+              Parallel <$> traverse extract (Foldable.toList list)
+
+            (Core.Field _ "serial", Core.ListLit _ list) ->
+              Serial <$> traverse extract (Foldable.toList list)
+
+            (Core.Field _ "tree", value) -> Dhall.typeError expected $ pTraceShowId value
+
+            (field, value) -> Dhall.typeError expected (Core.App field value)
+
+        actual -> Dhall.typeError expected actual
 
     expected :: Core.Expr Core.Src Void
     expected = $(Dhall.staticDhallExpression "(./package.dhall).StartOrder")

@@ -1,4 +1,3 @@
-cabal-version:       >=1.10
 name:                laps
 version:             0.0.1.0-unreleased
 author:              Laurens Duijvesteijn
@@ -13,9 +12,9 @@ executable laps
     containers,
     data-fix,
     dhall,
+    pretty-simple,
     recursion-schemes,
     string-conversions,
-    template-haskell,
     text,
     typed-process,
     unix
