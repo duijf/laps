@@ -38,6 +38,17 @@ let build
 
 in  [ build True
     , build False
+    , { name = "test"
+      , shortDesc = "Haskell tests"
+      , startOrder =
+          Laps.single
+            { alias = "cabal"
+            , executable =
+                Laps.program { program = "cabal", arguments = [ "test" ] }
+            , nixEnv = nixEnv
+            , watchExtensions = [ ".cabal", ".hs", ".dhall" ]
+            }
+      }
     , { name = "typecheck"
       , shortDesc = "Typecheck files"
       , startOrder =
