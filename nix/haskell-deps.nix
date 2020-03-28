@@ -9,6 +9,7 @@ haskellPackages:
       pretty-simple
       recursion-schemes
       string-conversions
+      tasty
       text
       typed-process
       unix

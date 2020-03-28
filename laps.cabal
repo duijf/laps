@@ -68,3 +68,15 @@ executable laps
 
   build-depends:
     laps
+
+test-suite tasty
+  import: deps, sanity
+
+  type: exitcode-stdio-1.0
+
+  hs-source-dirs: tests
+  main-is: Main.hs
+
+  build-depends:
+    laps,
+    tasty
