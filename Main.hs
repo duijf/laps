@@ -149,6 +149,8 @@ startOrderDecoder opts = Dhall.Decoder extract expected
             (Core.Field _ "serial", Core.ListLit _ list) ->
               Serial <$> traverse extract (Foldable.toList list)
 
+            _ -> Dhall.typeError expected field
+
         -- Because `App` is left associative in the AST, the AST function is
         -- 'inside out' for `Unit -> List StartOrder -> StartOrder`. It has
         -- this structure:
@@ -161,9 +163,8 @@ startOrderDecoder opts = Dhall.Decoder extract expected
                <*> traverse extract (Foldable.toList list)
 
         -- If our code is correct, this branch should never match. You can
-        -- uncomment to help with debugging. Be sure to also:
-        -- import Debug.Pretty.Simple (pTraceShowId)
-        -- actual -> Dhall.typeError expected (pTraceShowId actual)
+        -- add pTraceShowId to help with debugging.
+        actual -> Dhall.typeError expected actual
 
     expected :: Core.Expr Core.Src Void
     expected = $(Dhall.staticDhallExpression "(./package.dhall).StartOrder")
