@@ -3,33 +3,25 @@
 module Main where
 
 import           Control.Monad (when)
-import           Data.Fix (Fix (..))
-import qualified Data.Fix as Fix
 import qualified Data.Foldable as Foldable
 import           Data.Function ((&))
-import           Data.Functor.Foldable (embed)
-import           Data.Functor.Foldable.TH (makeBaseFunctor)
 import qualified Data.List as List
-import           Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
 import           Data.String.Conversions (ConvertibleStrings (..), cs)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
 import           Data.Void (Void)
-import           Dhall (FromDhall, ToDhall)
+import           Dhall (FromDhall)
 import qualified Dhall
 import qualified Dhall.Core as Core
 import qualified Dhall.Src as Core
 import qualified Dhall.TH as Dhall
-import           GHC.Generics (Generic)
 import qualified System.Console.ANSI as ANSI
 import qualified System.Exit as Exit
 import qualified System.IO as IO
 import qualified System.Posix.Env.ByteString as Env
 import qualified System.Posix.Files as Files
 import qualified System.Posix.Temp as Temp
-import           System.Process.Typed (ProcessConfig)
 import qualified System.Process.Typed as Process
 
 
