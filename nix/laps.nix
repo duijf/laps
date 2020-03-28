@@ -42,6 +42,10 @@ mkDerivation {
   # DB, so we won't bother.
   executableHaskellDepends = import ./haskell-deps.nix haskellPackages;
 
+  configureFlags = [
+    "-frelease"
+  ];
+
   executableToolDepends = [
     watchexec
   ];
