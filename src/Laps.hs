@@ -30,15 +30,16 @@ data Program
   = Program
     { program :: Text
     , arguments :: [Text]
-    }
+    } deriving (Show)
 
 data Script
   = Script
     { interpreter :: Text
     , contents :: Text
-    }
+    } deriving (Show)
 
 data Executable = S Script | P Program
+  deriving (Show)
 
 instance FromDhall Executable where
   autoWith :: Dhall.InterpretOptions -> Dhall.Decoder Executable
@@ -64,7 +65,7 @@ data NixEnv
     { srcFile :: Text
     , attr :: Maybe Text
     , clearEnv :: Bool
-    }
+    } deriving (Show)
 
 instance FromDhall NixEnv where
   autoWith :: Dhall.InterpretOptions -> Dhall.Decoder NixEnv
@@ -81,7 +82,7 @@ data Unit
     , alias :: Text
     , nixEnv :: Maybe NixEnv
     , watchExtensions :: [Text]
-    }
+    } deriving (Show)
 
 instance FromDhall Unit where
   autoWith :: Dhall.InterpretOptions -> Dhall.Decoder Unit
@@ -103,7 +104,7 @@ data StartOrder a
   | Parallel [StartOrder a]
   | Serial [StartOrder a]
   | Tree Unit [StartOrder a]
-  deriving (Functor, Foldable, Traversable)
+  deriving (Show, Functor, Foldable, Traversable)
 
 -- Decode a `StartOrder a` from the Boehm-Berarducci encoded Dhall version.
 --
@@ -183,7 +184,7 @@ data Command
   { name :: Text
   , shortDesc :: Text
   , startOrder :: StartOrder Unit
-  }
+  } deriving (Show)
 
 instance FromDhall Command where
   autoWith _opts = Dhall.record $
