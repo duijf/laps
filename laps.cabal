@@ -78,5 +78,8 @@ test-suite tasty
   main-is: Main.hs
 
   build-depends:
+    bytestring,
+    filepath,
     laps,
-    tasty
+    tasty,
+    tasty-golden
