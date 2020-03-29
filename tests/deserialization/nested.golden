@@ -1,0 +1,139 @@
+[ Command
+    { name = "foo"
+    , shortDesc = "foo"
+    , startOrder = Tree
+        ( Unit
+            { executable = P
+                ( Program
+                    { program = "foo"
+                    , arguments =
+                        [ "--bar"
+                        , "--baz"
+                        ]
+                    }
+                )
+            , alias = "foo"
+            , nixEnv = Nothing
+            , watchExtensions = []
+            }
+        )
+        [ Single
+            ( Unit
+                { executable = P
+                    ( Program
+                        { program = "foo"
+                        , arguments =
+                            [ "--bar"
+                            , "--baz"
+                            ]
+                        }
+                    )
+                , alias = "bar"
+                , nixEnv = Nothing
+                , watchExtensions = []
+                }
+            )
+        , Parallel
+            [ Single
+                ( Unit
+                    { executable = P
+                        ( Program
+                            { program = "foo"
+                            , arguments =
+                                [ "--bar"
+                                , "--baz"
+                                ]
+                            }
+                        )
+                    , alias = "baz"
+                    , nixEnv = Nothing
+                    , watchExtensions = []
+                    }
+                )
+            , Single
+                ( Unit
+                    { executable = P
+                        ( Program
+                            { program = "foo"
+                            , arguments =
+                                [ "--bar"
+                                , "--baz"
+                                ]
+                            }
+                        )
+                    , alias = "quix"
+                    , nixEnv = Nothing
+                    , watchExtensions = []
+                    }
+                )
+            ]
+        , Serial
+            [ Single
+                ( Unit
+                    { executable = P
+                        ( Program
+                            { program = "foo"
+                            , arguments =
+                                [ "--bar"
+                                , "--baz"
+                                ]
+                            }
+                        )
+                    , alias = "1"
+                    , nixEnv = Nothing
+                    , watchExtensions = []
+                    }
+                )
+            , Single
+                ( Unit
+                    { executable = P
+                        ( Program
+                            { program = "foo"
+                            , arguments =
+                                [ "--bar"
+                                , "--baz"
+                                ]
+                            }
+                        )
+                    , alias = "2"
+                    , nixEnv = Nothing
+                    , watchExtensions = []
+                    }
+                )
+            , Tree
+                ( Unit
+                    { executable = P
+                        ( Program
+                            { program = "foo"
+                            , arguments =
+                                [ "--bar"
+                                , "--baz"
+                                ]
+                            }
+                        )
+                    , alias = "3"
+                    , nixEnv = Nothing
+                    , watchExtensions = []
+                    }
+                )
+                [ Single
+                    ( Unit
+                        { executable = P
+                            ( Program
+                                { program = "foo"
+                                , arguments =
+                                    [ "--bar"
+                                    , "--baz"
+                                    ]
+                                }
+                            )
+                        , alias = "4"
+                        , nixEnv = Nothing
+                        , watchExtensions = []
+                        }
+                    )
+                ]
+            ]
+        ]
+    }
+]

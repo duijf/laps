@@ -13,7 +13,7 @@ common release
   ghc-options: -Werror
 
 common sanity
-  default-lanaguage: Haskell2010
+  default-language: Haskell2010
   ghc-options:
     -Wall
     -Wincomplete-record-updates
@@ -55,6 +55,7 @@ library
   import: deps, sanity
   hs-source-dirs: src
   exposed-modules:
+    Laps,
     OrphanInstances
 
 executable laps
@@ -63,7 +64,22 @@ executable laps
   if flag(release)
     import: release
 
-  main-is: Main.hs
+  main-is: src/Main.hs
 
   build-depends:
     laps
+
+test-suite tasty
+  import: deps, sanity
+
+  type: exitcode-stdio-1.0
+
+  hs-source-dirs: tests
+  main-is: Main.hs
+
+  build-depends:
+    bytestring,
+    filepath,
+    laps,
+    tasty,
+    tasty-golden

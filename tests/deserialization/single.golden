@@ -1,0 +1,21 @@
+[ Command
+    { name = "foo"
+    , shortDesc = "Run the foo"
+    , startOrder = Single
+        ( Unit
+            { executable = P
+                ( Program
+                    { program = "foo"
+                    , arguments =
+                        [ "--bar"
+                        , "--baz"
+                        ]
+                    }
+                )
+            , alias = "foo"
+            , nixEnv = Nothing
+            , watchExtensions = []
+            }
+        )
+    }
+]
