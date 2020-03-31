@@ -8,6 +8,7 @@ haskellPackages:
       data-fix
       dhall
       filepath
+      freer-simple
       pretty-simple
       recursion-schemes
       string-conversions
