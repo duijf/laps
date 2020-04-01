@@ -42,10 +42,14 @@ common deps
     ansi-terminal,
     base,
     containers,
+    conduit,
+    conduit-extra,
     data-fix,
     dhall,
     pretty-simple,
     recursion-schemes,
+    stm-conduit,
+    stm-chans,
     string-conversions,
     text,
     typed-process,
@@ -65,6 +69,17 @@ executable laps
     import: release
 
   main-is: bin/Laps.hs
+
+  build-depends:
+    laps
+
+executable stm-test
+  import: deps, sanity
+
+  if flag(release)
+    import: release
+
+  main-is: stm-test/Main.hs
 
   build-depends:
     laps
