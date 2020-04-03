@@ -82,7 +82,11 @@ executable stm-test
   main-is: stm-test/Main.hs
 
   build-depends:
-    laps
+    bytestring,
+    laps,
+    process,
+    resourcet,
+    stm,
 
 test-suite tasty
   import: deps, sanity
