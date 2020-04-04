@@ -120,6 +120,29 @@
    command or script defined in the `foo` command. Not sure how this would
    interact with starting multiple processes.
 
+ - Argument passing. Make Laps deserialize a list of functions to Commands and
+   use the types to infer arguments. E.g.:
+
+   ```dhall
+   let Build : Type = < Dev | Release >
+   in
+       [ \(build : Build) ->
+            { name = "build"
+            , ...
+            }
+       ]
+   ```
+
+   Becomes:
+
+   ```
+   $ laps build dev
+   $ laps build release
+   ```
+
+   Other types would lead to non-constant arguments (e.g. `Integers` and `Text`).
+   Records could be flags if the users specify a default somehow?
+
  - Validate a few required invariants asssertions about the config format once
    fully settled on the types. Report error messages nicely.
 
