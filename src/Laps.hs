@@ -3,7 +3,7 @@ module Laps where
 
 import           Control.Monad (void, when)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
-import           Control.Monad.Trans.Resource (ResourceT)
+import           Control.Monad.Trans.Resource (MonadResource)
 import qualified Control.Monad.Trans.Resource as Resource
 import qualified Data.Foldable as Foldable
 import           Data.Function ((&))
@@ -275,7 +275,7 @@ printCommand command = do
   Text.putStrLn (shortDesc command)
 
 
-getProcessConfig :: MonadIO m => Unit -> ResourceT m (Process.ProcessConfig () () ())
+getProcessConfig :: (MonadIO m, MonadResource m) => Unit -> m (Process.ProcessConfig () () ())
 getProcessConfig unit = do
   (prog, args) <- case executable unit of
     (S Script{interpreter, contents}) -> do
@@ -295,7 +295,7 @@ getProcessConfig unit = do
       Nothing -> Process.proc prog args
 
 
-writeScript :: MonadIO m => Text -> Text -> ResourceT m FilePath
+writeScript :: (MonadIO m, MonadResource m) => Text -> Text -> m FilePath
 writeScript interpreter contents = do
   path <- liftIO $ do
     (path, handle) <- Temp.mkstemp "/tmp/laps-"
