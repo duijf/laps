@@ -64,7 +64,7 @@ executable laps
   if flag(release)
     import: release
 
-  main-is: src/Main.hs
+  main-is: bin/Laps.hs
 
   build-depends:
     laps
