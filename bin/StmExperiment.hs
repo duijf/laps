@@ -1,5 +1,3 @@
-module Main where
-
 import           Conduit
 import           Control.Concurrent
 import           Control.Concurrent.STM

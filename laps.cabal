@@ -73,13 +73,13 @@ executable laps
   build-depends:
     laps
 
-executable stm-test
+executable stm
   import: deps, sanity
 
   if flag(release)
     import: release
 
-  main-is: stm-test/Main.hs
+  main-is: bin/StmExperiment.hs
 
   build-depends:
     bytestring,
@@ -94,7 +94,7 @@ executable native
   if flag(release)
     import: release
 
-  main-is: native-test/Native.hs
+  main-is: bin/NativeExperiment.hs
   extra-libraries:
     sys
 
