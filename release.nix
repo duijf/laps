@@ -14,4 +14,21 @@
   laps-dev = pkgs.haskellPackages.callPackage ./nix/laps.nix {
     gitRev = "9fd36fbc62e8479ee0e498fd40502e2560c5a131";
   };
+
+  libsys = pkgs.stdenv.mkDerivation {
+    name = "libsys";
+
+    phases = ["buildPhase" "installPhase"];
+
+    buildPhase = ''
+      cp ${./sys.rs} sys.rs
+      ${pkgs.rustc}/bin/rustc --crate-type=cdylib sys.rs
+    '';
+
+    installPhase = ''
+      ${pkgs.tree}/bin/tree
+      mkdir -p $out/lib
+      cp libsys.so $out/lib
+    '';
+  };
 }

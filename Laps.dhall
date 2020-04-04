@@ -17,18 +17,13 @@ let build
           , startOrder =
               Laps.single
                 { executable =
-                    Laps.program
-                      { program = "cabal"
-                      , arguments =
-                          Prelude.List.concat
-                            Text
-                            [ [ "new-build" ]
-                            ,       if release
-
-                              then  [ "-frelease" ]
-
-                              else  [] : List Text
-                            ]
+                    Laps.script
+                      { interpreter = "/bin/bash"
+                      , contents =
+                          ''
+                          cabal configure --extra-lib-dirs=$(nix-build release.nix -A libsys)/lib
+                          cabal new-build ${if release then "-frelease" else ""}
+                          ''
                       }
                 , watchExtensions = [ ".cabal", ".hs", ".dhall" ]
                 , nixEnv = nixEnv

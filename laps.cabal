@@ -88,6 +88,16 @@ executable stm-test
     resourcet,
     stm,
 
+executable native
+  import: deps, sanity
+
+  if flag(release)
+    import: release
+
+  main-is: native-test/Native.hs
+  extra-libraries:
+    sys
+
 test-suite tasty
   import: deps, sanity
 
