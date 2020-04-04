@@ -305,12 +305,18 @@ writeScript interpreter contents = do
     Text.hPutStr   handle contents
     IO.hClose      handle
 
-    status <- Files.getFileStatus path
-    Files.setFileMode path (Files.fileMode status `Files.unionFileModes` Files.ownerExecuteMode)
+    makeExecutable path
     pure $ path
 
   void $ Resource.register $ Files.removeLink path
   pure path
+
+
+makeExecutable :: FilePath -> IO ()
+makeExecutable path = do
+  status <- Files.getFileStatus path
+  let newMode = Files.fileMode status `Files.unionFileModes` Files.ownerExecuteMode
+  Files.setFileMode path newMode
 
 
 runUnit :: Unit -> IO ()
