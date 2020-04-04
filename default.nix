@@ -15,5 +15,7 @@ in
       release.laps-dev
       stylish-haskell
       watchexec
+      rustc
+      release.libsys
     ];
   }

@@ -3,3 +3,7 @@ dist-newstyle/
 
 # Nix result symlinks
 result*
+
+# Local configuration overrides
+cabal.project.local
+cabal.project.local~

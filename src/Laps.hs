@@ -310,7 +310,19 @@ writeScript interpreter contents = do
 runUnit :: Unit -> IO ()
 runUnit unit = do
   (prog, args, tempScript) <- getCommandProgAndArgs unit
-  () <$ (Process.runProcess $ Process.proc prog args)
+
+  let
+    procSpec
+      = Process.setStderr Process.createPipe
+      $ Process.setStdout Process.createPipe
+      $ Process.proc prog args
+
+  Process.withProcessWait (procSpec) $ \proc -> do
+    let
+      stdout = Process.getStdout proc
+      stderr = Process.getStderr proc
+
+    pure ()
 
   -- Clean up temporary script if it exists.
   maybe (pure mempty) Files.removeLink tempScript

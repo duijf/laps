@@ -5,12 +5,15 @@ haskellPackages:
       base
       bytestring
       containers
+      conduit
+      conduit-extra
       data-fix
       dhall
       filepath
       pretty-simple
       recursion-schemes
       string-conversions
+      stm-conduit
       tasty
       tasty-golden
       text
