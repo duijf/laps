@@ -1,7 +1,10 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Laps where
 
-import           Control.Monad (when)
+import           Control.Monad (void, when)
+import           Control.Monad.IO.Class (MonadIO, liftIO)
+import           Control.Monad.Trans.Resource (ResourceT)
+import qualified Control.Monad.Trans.Resource as Resource
 import qualified Data.Foldable as Foldable
 import           Data.Function ((&))
 import qualified Data.List as List
@@ -272,14 +275,14 @@ printCommand command = do
   Text.putStrLn (shortDesc command)
 
 
-getCommandProgAndArgs :: Unit -> IO (String, [String], Maybe FilePath)
-getCommandProgAndArgs unit = do
-  (prog, args, tempScript) <- case executable unit of
+getProcessConfig :: MonadIO m => Unit -> ResourceT m (Process.ProcessConfig () () ())
+getProcessConfig unit = do
+  (prog, args) <- case executable unit of
     (S Script{interpreter, contents}) -> do
       path <- writeScript interpreter contents
-      pure (path, [], Just path)
+      pure (path, [])
 
-    (P Program{program, arguments}) -> pure (cs $ program, cs $ arguments, Nothing)
+    (P Program{program, arguments}) -> pure (cs $ program, cs $ arguments)
 
   let
     watchExec = case watchExtensions unit of
@@ -288,41 +291,29 @@ getCommandProgAndArgs unit = do
 
   pure $
     case nixEnv unit of
-      Just (env) -> ("nix", ["run", "-f", cs $ srcFile env, "-c"] ++ watchExec ++ [prog] ++ args, tempScript)
-      Nothing -> (prog, args, tempScript)
+      Just (env) -> Process.proc "nix" (["run", "-f", cs $ srcFile env, "-c"] ++ watchExec ++ [prog] ++ args)
+      Nothing -> Process.proc prog args
 
 
-writeScript :: Text -> Text -> IO FilePath
+writeScript :: MonadIO m => Text -> Text -> ResourceT m FilePath
 writeScript interpreter contents = do
-  (path, handle) <- Temp.mkstemp "/tmp/laps-"
+  path <- liftIO $ do
+    (path, handle) <- Temp.mkstemp "/tmp/laps-"
 
-  Text.hPutStr   handle "#!"
-  Text.hPutStrLn handle interpreter
-  Text.hPutStr   handle contents
-  IO.hClose      handle
+    Text.hPutStr   handle "#!"
+    Text.hPutStrLn handle interpreter
+    Text.hPutStr   handle contents
+    IO.hClose      handle
 
-  status <- Files.getFileStatus path
-  Files.setFileMode path (Files.fileMode status `Files.unionFileModes` Files.ownerExecuteMode)
+    status <- Files.getFileStatus path
+    Files.setFileMode path (Files.fileMode status `Files.unionFileModes` Files.ownerExecuteMode)
+    pure $ path
 
-  pure $ path
+  void $ Resource.register $ Files.removeLink path
+  pure path
 
 
 runUnit :: Unit -> IO ()
-runUnit unit = do
-  (prog, args, tempScript) <- getCommandProgAndArgs unit
-
-  let
-    procSpec
-      = Process.setStderr Process.createPipe
-      $ Process.setStdout Process.createPipe
-      $ Process.proc prog args
-
-  Process.withProcessWait (procSpec) $ \proc -> do
-    let
-      stdout = Process.getStdout proc
-      stderr = Process.getStderr proc
-
-    pure ()
-
-  -- Clean up temporary script if it exists.
-  maybe (pure mempty) Files.removeLink tempScript
+runUnit unit = Resource.runResourceT $ do
+  proc <- getProcessConfig unit
+  Process.runProcess_ proc

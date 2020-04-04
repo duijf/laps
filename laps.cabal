@@ -48,12 +48,13 @@ common deps
     dhall,
     pretty-simple,
     recursion-schemes,
+    resourcet,
     stm-conduit,
     stm-chans,
     string-conversions,
     text,
     typed-process,
-    unix
+    unix,
 
 library
   import: deps, sanity
