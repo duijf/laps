@@ -1,6 +1,8 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Laps where
 
+import qualified Control.Concurrent.Async as Async
+import qualified Control.Exception as Exception
 import           Control.Monad (void, when)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Trans.Resource (MonadResource)
@@ -12,6 +14,7 @@ import           Data.String.Conversions (cs)
 import           Data.Text (Text)
 import qualified Data.Text as Text
 import qualified Data.Text.IO as Text
+import qualified Data.Traversable as Traversable
 import           Data.Void (Void)
 import           Dhall (FromDhall)
 import qualified Dhall
@@ -97,16 +100,17 @@ instance FromDhall Unit where
       <*> Dhall.field "watchExtensions" (Dhall.list Dhall.strictText)
 
 
--- We have the type parameter `a`, because we want to derive the useful
--- functor, foldable, and traversable instances. In practice, we only ever
--- have values of type `StartOrder Unit`.
+-- We have the type parameter @a@, because we want to derive the useful
+-- functor, foldable, and traversable instances. The base datatype for
+-- this structure is a @Unit@, but making the type parameter generic
+-- allows us to map @Units@ to IO actions and fold those together.
 --
 -- Later, I want to add a directed acyclic graph here as well.
 data StartOrder a
   = Single a
   | Parallel [StartOrder a]
   | Serial [StartOrder a]
-  | Tree Unit [StartOrder a]
+  | Tree a [StartOrder a]
   deriving (Show, Functor, Foldable, Traversable)
 
 -- Decode a `StartOrder a` from the Boehm-Berarducci encoded Dhall version.
@@ -224,9 +228,10 @@ main = do
 
   List.find (\c -> name c == head args) commands & \case
     Just command ->
-      -- Does not do what we want yet: this just runs everything
-      -- in series while we wait for an actual implementation.
-      Foldable.traverse_ runUnit (startOrder command)
+      -- Does not do what we want yet: we don't have a way to
+      -- stop the computation in case a single process returns
+      -- errors.
+      void $ forStartOrder runUnit (startOrder command)
     Nothing -> do
       printColor ANSI.Red "error:"
       Text.putStr " No command "
@@ -319,7 +324,23 @@ makeExecutable path = do
   Files.setFileMode path newMode
 
 
+-- @Traversable.for@ specialized to @StartOrder@ and @IO@. Evaluates the action in parallel
+-- for all @StartOrder.Parallel@ entries and the list of children of @StartOrder.Tree@.
+forStartOrder :: (a -> IO b) -> StartOrder a -> IO (StartOrder b)
+forStartOrder f startOrder = case startOrder of
+  Single a -> Single <$> f a
+  Serial as -> Serial <$> Traversable.for as (forStartOrder f)
+  Parallel as -> Parallel <$> Async.forConcurrently as (forStartOrder f)
+  Tree a as -> do
+    a' <- f a
+    as' <- Async.forConcurrently as (forStartOrder f)
+    pure $ Tree a' as'
+
+
 runUnit :: Unit -> IO ()
 runUnit unit = Resource.runResourceT $ do
   proc <- getProcessConfig unit
-  Process.runProcess_ proc
+
+  -- Discard ExitCodeException for now. We need to find a way
+  -- to propagate this nicely.
+  liftIO $ void $ Exception.try @Process.ExitCodeException $ Process.runProcess_ proc

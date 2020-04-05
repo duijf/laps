@@ -40,6 +40,7 @@ common sanity
 common deps
   build-depends:
     ansi-terminal,
+    async,
     base,
     containers,
     conduit,

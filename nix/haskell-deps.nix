@@ -2,6 +2,7 @@ haskellPackages:
   with haskellPackages;
     [
       ansi-terminal
+      async
       base
       bytestring
       containers
