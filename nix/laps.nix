@@ -2,6 +2,7 @@
 , lib
 , mkDerivation
 , watchexec
+, libsys
 , gitRev ? ""
 }:
 
@@ -41,6 +42,10 @@ mkDerivation {
   # implementation will concatenate all of those into one big GHC package
   # DB, so we won't bother.
   executableHaskellDepends = import ./haskell-deps.nix haskellPackages;
+
+  executableSystemDepends = [
+    libsys
+  ];
 
   configureFlags = [
     "-frelease"
