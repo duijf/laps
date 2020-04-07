@@ -1,12 +1,16 @@
 {-# LANGUAGE TemplateHaskell #-}
+
 module Laps where
 
 import qualified Control.Concurrent.Async as Async
-import qualified Control.Exception as Exception
 import           Control.Monad (void, when)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Trans.Resource (MonadResource)
 import qualified Control.Monad.Trans.Resource as Resource
+import qualified Data.ByteString.Char8 as ByteString
+import           Data.Conduit ((.|))
+import qualified Data.Conduit as Conduit
+import qualified Data.Conduit.Combinators as Conduit
 import qualified Data.Foldable as Foldable
 import           Data.Function ((&))
 import qualified Data.List as List
@@ -27,7 +31,7 @@ import qualified System.IO as IO
 import qualified System.Posix.Env.ByteString as Env
 import qualified System.Posix.Files as Files
 import qualified System.Posix.Temp as Temp
-import qualified System.Process.Typed as Process
+import qualified System.Process as Process
 
 import           OrphanInstances ()
 
@@ -280,7 +284,7 @@ printCommand command = do
   Text.putStrLn (shortDesc command)
 
 
-getProcessConfig :: (MonadIO m, MonadResource m) => Unit -> m (Process.ProcessConfig () () ())
+getProcessConfig :: (MonadIO m, MonadResource m) => Unit -> m (Process.CreateProcess, IO.Handle)
 getProcessConfig unit = do
   (prog, args) <- case executable unit of
     (S Script{interpreter, contents}) -> do
@@ -294,10 +298,17 @@ getProcessConfig unit = do
       [] -> []
       exts -> ["watchexec", "--exts", Foldable.fold $ List.intersperse "," $ cs $ exts, "--"]
 
+  (hRead, hWrite) <- liftIO $ Process.createPipe
+  _ <- Resource.register $ IO.hClose hRead
+  _ <- Resource.register $ IO.hClose hWrite
+
+  let outputStream = Process.UseHandle hWrite
+      setOutputStream cp = cp { Process.std_out = outputStream, Process.std_err = outputStream }
+
   pure $
     case nixEnv unit of
-      Just (env) -> Process.proc "nix" (["run", "-f", cs $ srcFile env, "-c"] ++ watchExec ++ [prog] ++ args)
-      Nothing -> Process.proc prog args
+      Just (env) -> (setOutputStream $ Process.proc "nix" (["run", "-f", cs $ srcFile env, "-c"] ++ watchExec ++ [prog] ++ args), hRead)
+      Nothing -> (setOutputStream $ Process.proc prog args, hRead)
 
 
 writeScript :: (MonadIO m, MonadResource m) => Text -> Text -> m FilePath
@@ -339,8 +350,13 @@ forStartOrder f startOrder = case startOrder of
 
 runUnit :: Unit -> IO ()
 runUnit unit = Resource.runResourceT $ do
-  proc <- getProcessConfig unit
+  (createProc, readHandle) <- getProcessConfig unit
+  liftIO $ Process.withCreateProcess createProc $ \_stdin _stdout _stderr _proc -> do
+    Conduit.runConduit $
+      Conduit.sourceHandle readHandle
+        .| Conduit.concatMap (ByteString.split '\n')
+        .| Conduit.filter (/= "")
+        .| Conduit.map (\str -> cs (alias unit) <> ": " <> str)
+        .| Conduit.mapM_ ByteString.putStrLn
 
-  -- Discard ExitCodeException for now. We need to find a way
-  -- to propagate this nicely.
-  liftIO $ void $ Exception.try @Process.ExitCodeException $ Process.runProcess_ proc
+    pure ()
