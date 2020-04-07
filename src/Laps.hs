@@ -28,6 +28,7 @@ import qualified Dhall.TH as Dhall
 import qualified System.Console.ANSI as ANSI
 import qualified System.Exit as Exit
 import qualified System.IO as IO
+import qualified System.Posix as Posix
 import qualified System.Posix.Env.ByteString as Env
 import qualified System.Posix.Files as Files
 import qualified System.Posix.Temp as Temp
@@ -298,7 +299,11 @@ getProcessConfig unit = do
       [] -> []
       exts -> ["watchexec", "--exts", Foldable.fold $ List.intersperse "," $ cs $ exts, "--"]
 
-  (hRead, hWrite) <- liftIO $ Process.createPipe
+  (termPrimFd, termSecFd) <- liftIO $ Posix.openPseudoTerminal
+
+  hRead <- liftIO $ Posix.fdToHandle termPrimFd
+  hWrite <- liftIO $ Posix.fdToHandle termSecFd
+
   _ <- Resource.register $ IO.hClose hRead
   _ <- Resource.register $ IO.hClose hWrite
 
