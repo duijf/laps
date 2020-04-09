@@ -357,10 +357,13 @@ runUnit :: Unit -> IO ()
 runUnit unit = Resource.runResourceT $ do
   (createProc, readHandle) <- getProcessConfig unit
   liftIO $ Process.withCreateProcess createProc $ \_stdin _stdout _stderr _proc -> do
+    let aliasPretty =
+          (ANSI.setSGRCode [ANSI.Reset, ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Cyan])
+          <> cs (alias unit) <> ": " <> ANSI.setSGRCode [ANSI.Reset]
     Conduit.runConduit $
       Conduit.sourceHandle readHandle
         .| Conduit.linesUnboundedAscii
-        .| Conduit.map (\str -> cs (alias unit) <> ": " <> str)
+        .| Conduit.map (\str -> cs aliasPretty <> str)
         .| Conduit.mapM_ ByteString.putStrLn
 
     pure ()
