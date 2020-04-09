@@ -359,8 +359,7 @@ runUnit unit = Resource.runResourceT $ do
   liftIO $ Process.withCreateProcess createProc $ \_stdin _stdout _stderr _proc -> do
     Conduit.runConduit $
       Conduit.sourceHandle readHandle
-        .| Conduit.concatMap (ByteString.split '\n')
-        .| Conduit.filter (/= "")
+        .| Conduit.linesUnboundedAscii
         .| Conduit.map (\str -> cs (alias unit) <> ": " <> str)
         .| Conduit.mapM_ ByteString.putStrLn
 
