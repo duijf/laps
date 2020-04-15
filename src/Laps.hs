@@ -1,3 +1,4 @@
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
 
 module Laps where
@@ -17,6 +18,7 @@ import qualified Data.Conduit.Combinators as Conduit
 import qualified Data.Foldable as Foldable
 import           Data.Function ((&))
 import qualified Data.List as List
+import           Data.Semigroup (Max (..))
 import           Data.String.Conversions (cs)
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -94,10 +96,10 @@ instance FromDhall NixEnv where
 
 data Unit
   = Unit
-    { executable :: Executable
-    , alias :: Text
-    , nixEnv :: Maybe NixEnv
-    , watchExtensions :: [Text]
+    { uExecutable :: Executable
+    , uAlias :: Text
+    , uNixEnv :: Maybe NixEnv
+    , uWatchExtensions :: [Text]
     } deriving (Show)
 
 instance FromDhall Unit where
@@ -108,6 +110,17 @@ instance FromDhall Unit where
       <*> Dhall.field "alias" Dhall.strictText
       <*> Dhall.field "nixEnv" (Dhall.maybe (Dhall.autoWith opts))
       <*> Dhall.field "watchExtensions" (Dhall.list Dhall.strictText)
+
+
+-- Internal representation of a Unit. Contains fields not present in the
+-- Dhall representation (e.g. calculated values).
+data UnitInternal
+  = UnitInternal
+    { uiExecutable :: Executable
+    , uiAliasPretty :: ByteString
+    , uiNixEnv :: Maybe NixEnv
+    , uiWatchExtensions :: [Text]
+    } deriving (Show)
 
 
 -- We have the type parameter @a@, because we want to derive the useful
@@ -237,11 +250,14 @@ main = do
     Exit.exitFailure)
 
   List.find (\c -> name c == head args) commands & \case
-    Just command ->
+    Just command -> do
+      let
+        maxAliasLength = foldMap (Max . Text.length . uAlias) (startOrder command)
+        startOrderInt = fmap (convert maxAliasLength) (startOrder command)
       -- Does not do what we want yet: we don't have a way to
       -- stop the computation in case a single process returns
       -- errors.
-      void $ forStartOrder runUnit (startOrder command)
+      void $ forStartOrder runUnit startOrderInt
     Nothing -> do
       printColor ANSI.Red "error:"
       Text.putStr " No command "
@@ -251,6 +267,27 @@ main = do
       Text.putStr " Available commands are: "
       Foldable.fold $ List.intersperse (Text.putStr ", ") $ printBold <$> name <$> commands
       Text.putStr "\n"
+
+
+-- Boilerplate to prevent illegal states.
+convert :: Max Int -> Unit -> UnitInternal
+convert maxAliasLength Unit{..} =
+  UnitInternal
+    { uiExecutable = uExecutable
+    , uiAliasPretty = prettifyAlias maxAliasLength uAlias
+    , uiNixEnv = uNixEnv
+    , uiWatchExtensions = uWatchExtensions
+    }
+
+
+prettifyAlias :: Max Int -> Text -> ByteString
+prettifyAlias maxAliasLength alias =
+  let
+    cyan = cs $ ANSI.setSGRCode [ANSI.Reset, ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Cyan]
+    padded = cs $ (Text.replicate ((getMax maxAliasLength) - (Text.length alias)) " ") <> alias
+    reset = cs $ ANSI.setSGRCode [ANSI.Reset]
+  in
+    cyan <> padded <> ": " <> reset
 
 
 printColor :: ANSI.Color -> Text -> IO ()
@@ -290,9 +327,9 @@ printCommand command = do
   Text.putStrLn (shortDesc command)
 
 
-getProcessConfig :: (MonadIO m, MonadResource m) => Unit -> m (Process.CreateProcess, IO.Handle)
+getProcessConfig :: (MonadIO m, MonadResource m) => UnitInternal -> m (Process.CreateProcess, IO.Handle)
 getProcessConfig unit = do
-  (prog, args) <- case executable unit of
+  (prog, args) <- case uiExecutable unit of
     (S Script{interpreter, contents}) -> do
       path <- writeScript interpreter contents
       pure (path, [])
@@ -300,7 +337,7 @@ getProcessConfig unit = do
     (P Program{program, arguments}) -> pure (cs $ program, cs $ arguments)
 
   let
-    watchExec = case watchExtensions unit of
+    watchExec = case uiWatchExtensions unit of
       [] -> []
       exts -> ["watchexec", "--exts", Foldable.fold $ List.intersperse "," $ cs $ exts, "--"]
 
@@ -316,7 +353,7 @@ getProcessConfig unit = do
       setOutputStream cp = cp { Process.std_out = outputStream, Process.std_err = outputStream }
 
   pure $
-    case nixEnv unit of
+    case uiNixEnv unit of
       Just (env) -> (setOutputStream $ Process.proc "nix" (["run", "-f", cs $ srcFile env, "-c"] ++ watchExec ++ [prog] ++ args), hRead)
       Nothing -> (setOutputStream $ Process.proc prog args, hRead)
 
@@ -358,17 +395,14 @@ forStartOrder f startOrder = case startOrder of
     pure $ Tree a' as'
 
 
-runUnit :: Unit -> IO ()
+runUnit :: UnitInternal -> IO ()
 runUnit unit = Resource.runResourceT $ do
   (createProc, readHandle) <- getProcessConfig unit
   liftIO $ Process.withCreateProcess createProc $ \_stdin _stdout _stderr _proc -> do
-    let aliasPretty =
-          (ANSI.setSGRCode [ANSI.Reset, ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Cyan])
-          <> cs (alias unit) <> ": " <> ANSI.setSGRCode [ANSI.Reset]
     Conduit.runConduit $
       sourceHandleCatchIoErr readHandle
         .| Conduit.linesUnboundedAscii
-        .| Conduit.map (\str -> cs aliasPretty <> str)
+        .| Conduit.map (uiAliasPretty unit <>)
         .| Conduit.mapM_ ByteString.putStrLn
 
     pure ()
