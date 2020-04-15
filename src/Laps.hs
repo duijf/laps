@@ -3,11 +3,14 @@
 module Laps where
 
 import qualified Control.Concurrent.Async as Async
+import qualified Control.Exception as Exception
 import           Control.Monad (void, when)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Trans.Resource (MonadResource)
 import qualified Control.Monad.Trans.Resource as Resource
+import           Data.ByteString.Char8 (ByteString)
 import qualified Data.ByteString.Char8 as ByteString
+import qualified Data.ByteString.Lazy.Internal as LazyByteString
 import           Data.Conduit ((.|))
 import qualified Data.Conduit as Conduit
 import qualified Data.Conduit.Combinators as Conduit
@@ -25,9 +28,11 @@ import qualified Dhall
 import qualified Dhall.Core as Core
 import qualified Dhall.Src as Core
 import qualified Dhall.TH as Dhall
+import           GHC.IO.Exception (IOErrorType (..))
 import qualified System.Console.ANSI as ANSI
 import qualified System.Exit as Exit
 import qualified System.IO as IO
+import qualified System.IO.Error as IO
 import qualified System.Posix as Posix
 import qualified System.Posix.Env.ByteString as Env
 import qualified System.Posix.Files as Files
@@ -361,9 +366,37 @@ runUnit unit = Resource.runResourceT $ do
           (ANSI.setSGRCode [ANSI.Reset, ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Cyan])
           <> cs (alias unit) <> ": " <> ANSI.setSGRCode [ANSI.Reset]
     Conduit.runConduit $
-      Conduit.sourceHandle readHandle
+      sourceHandleCatchIoErr readHandle
         .| Conduit.linesUnboundedAscii
         .| Conduit.map (\str -> cs aliasPretty <> str)
         .| Conduit.mapM_ ByteString.putStrLn
 
     pure ()
+
+
+-- @Conduit.sourceHandle@ which catches @GHC.IO.Exception.IOErrorType.HardwareFault@s.
+-- These correspond to @errno 5@ on Linux which is returned when you attempt to read from
+-- a pseudo terminal which has been closed because the child process has exited (but I
+-- might be doing something very wrong here).
+sourceHandleCatchIoErr :: MonadIO m => IO.Handle -> Conduit.ConduitT i ByteString m ()
+sourceHandleCatchIoErr h = loop
+  where
+    loop = do
+      result <- liftIO $ Exception.tryJust catchHardwareFaults (ByteString.hGetSome h LazyByteString.defaultChunkSize)
+      case result of
+        Right bs | ByteString.null bs -> pure ()
+        Right bs | otherwise -> Conduit.yield bs >> loop
+        Left _ -> pure ()
+
+
+catchHardwareFaults :: IOError -> Maybe IOError
+catchHardwareFaults ioe =
+  if isHardwareFault $ IO.ioeGetErrorType ioe
+  then Just ioe
+  else Nothing
+
+
+isHardwareFault :: IOErrorType -> Bool
+isHardwareFault = \case
+  HardwareFault -> True
+  _ -> False
