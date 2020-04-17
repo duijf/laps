@@ -3,7 +3,7 @@
     , shortDesc = "Run the foo"
     , startOrder = Single
         ( Unit
-            { executable = P
+            { uExecutable = P
                 ( Program
                     { program = "foo"
                     , arguments =
@@ -12,9 +12,9 @@
                         ]
                     }
                 )
-            , alias = "foo"
-            , nixEnv = Nothing
-            , watchExtensions = []
+            , uAlias = "foo"
+            , uNixEnv = Nothing
+            , uWatchExtensions = []
             }
         )
     }
