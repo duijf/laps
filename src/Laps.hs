@@ -1,5 +1,7 @@
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Laps where
 
@@ -412,10 +414,29 @@ runUnit unit = Resource.runResourceT $ do
     Conduit.runConduit $
       sourceHandleCatchIoErr readHandle
         .| Conduit.linesUnboundedAscii
+        -- Strip the clear line ANSI code. Otherwise programs like Nix run mess up
+        -- the output.
+        .| Conduit.map renderClearLines
         .| Conduit.map (uiAliasPretty unit <>)
         .| Conduit.mapM_ ByteString.putStrLn
 
     pure ()
+
+
+infixr 5 :<
+pattern (:<) :: Char -> ByteString -> ByteString
+pattern b :< bs <- (ByteString.uncons -> Just (b, bs))
+
+
+renderClearLines :: ByteString -> ByteString
+renderClearLines s = case ByteString.breakSubstring ansiClear s of
+  (sHead, "") -> sHead
+  (_, '\x1b' :< '[' :< 'K' :< sTail) -> renderClearLines sTail
+  _ -> error "renderClearLines: Pattern match error on ANSI escape code"
+
+
+ansiClear :: ByteString
+ansiClear = "\x1b[K"
 
 
 -- @Conduit.sourceHandle@ which catches @GHC.IO.Exception.IOErrorType.HardwareFault@s.
