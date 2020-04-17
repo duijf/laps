@@ -44,6 +44,17 @@ in  [ build True
             , watchExtensions = [ ".cabal", ".hs", ".dhall" ]
             }
       }
+    , { name = "test-accept"
+      , shortDesc = "Haskell tests (accept changes to golden tests)"
+      , startOrder =
+          Laps.single
+            { alias = "cabal"
+            , executable =
+                Laps.program { program = "cabal", arguments = [ "test", "--test-option=--accept" ] }
+            , nixEnv = nixEnv
+            , watchExtensions = [] : List Text
+            }
+      }
     , { name = "typecheck"
       , shortDesc = "Typecheck files"
       , startOrder =
