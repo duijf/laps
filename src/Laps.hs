@@ -251,13 +251,10 @@ main = do
 
   List.find (\c -> name c == head args) commands & \case
     Just command -> do
-      let
-        maxAliasLength = foldMap (Max . Text.length . uAlias) (startOrder command)
-        startOrderInt = fmap (convert maxAliasLength) (startOrder command)
       -- Does not do what we want yet: we don't have a way to
       -- stop the computation in case a single process returns
       -- errors.
-      void $ forStartOrder runUnit startOrderInt
+      void $ forStartOrder runUnit (convert $ startOrder command)
     Nothing -> do
       printColor ANSI.Red "error:"
       Text.putStr " No command "
@@ -269,25 +266,38 @@ main = do
       Text.putStr "\n"
 
 
--- Boilerplate to prevent illegal states.
-convert :: Max Int -> Unit -> UnitInternal
-convert maxAliasLength Unit{..} =
-  UnitInternal
-    { uiExecutable = uExecutable
-    , uiAliasPretty = prettifyAlias maxAliasLength uAlias
-    , uiNixEnv = uNixEnv
-    , uiWatchExtensions = uWatchExtensions
-    }
-
-
-prettifyAlias :: Max Int -> Text -> ByteString
-prettifyAlias maxAliasLength alias =
+-- Convert units in a startorder to their internal representaition.
+convert :: StartOrder Unit -> StartOrder UnitInternal
+convert startOrder =
   let
-    cyan = cs $ ANSI.setSGRCode [ANSI.Reset, ANSI.SetColor ANSI.Foreground ANSI.Vivid ANSI.Cyan]
+    maxAliasLength = foldMap (Max . Text.length . uAlias) startOrder
+    colors = [ANSI.Yellow, ANSI.Blue, ANSI.Magenta, ANSI.Cyan, ANSI.Red, ANSI.Green]
+
+    convertUnit :: Unit -> Int -> UnitInternal
+    convertUnit Unit{..} i =
+      UnitInternal
+        { uiExecutable = uExecutable
+        , uiAliasPretty = prettifyAlias maxAliasLength (colors !! (i `mod` (length colors))) uAlias
+        , uiNixEnv = uNixEnv
+        , uiWatchExtensions = uWatchExtensions
+        }
+  in fmap (uncurry convertUnit) (withIndex startOrder)
+
+
+-- Turn a traversable into a traversable storing an index. The index is dependent
+-- on the traversal order.
+withIndex :: Traversable t => t a -> t (a, Int)
+withIndex = snd . (Traversable.mapAccumL (\i e -> (i+1, (e, i))) 0)
+
+
+prettifyAlias :: Max Int -> ANSI.Color -> Text -> ByteString
+prettifyAlias maxAliasLength color alias =
+  let
+    cyan = cs $ ANSI.setSGRCode [ANSI.Reset, ANSI.SetColor ANSI.Foreground ANSI.Vivid color]
     padded = cs $ (Text.replicate ((getMax maxAliasLength) - (Text.length alias)) " ") <> alias
     reset = cs $ ANSI.setSGRCode [ANSI.Reset]
   in
-    cyan <> padded <> ": " <> reset
+    cyan <> padded <> reset <> " | "
 
 
 printColor :: ANSI.Color -> Text -> IO ()
