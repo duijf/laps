@@ -114,5 +114,7 @@ test-suite tasty
     bytestring,
     filepath,
     laps,
+    quickcheck-instances,
     tasty,
-    tasty-golden
+    tasty-golden,
+    tasty-quickcheck,

@@ -1,5 +1,6 @@
 module Main where
 
+import qualified Data.ByteString.Char8 as ByteString
 import qualified Data.ByteString.Lazy as LByteString
 import qualified Data.List as List
 import           Data.String.Conversions (cs)
@@ -7,8 +8,10 @@ import qualified Dhall
 import qualified GHC.IO.Encoding
 import qualified System.FilePath as FilePath
 import qualified System.IO
+import           Test.QuickCheck.Instances ()
 import qualified Test.Tasty as Tasty
 import qualified Test.Tasty.Golden as Golden
+import qualified Test.Tasty.QuickCheck as QC
 import qualified Text.Pretty.Simple as PP
 
 import qualified Laps
@@ -43,6 +46,13 @@ getDeserializationTests = do
     ]
 
 
+stringProcessing :: Tasty.TestTree
+stringProcessing = Tasty.testGroup "Unit tests"
+  [ QC.testProperty "renderClearlines strips all content before ANSI clear code" $
+      \bytestring -> (Laps.renderClearLines (ByteString.concat [bytestring, Laps.ansiClear, "asdf"]) == "asdf")
+  ]
+
+
 main :: IO ()
 main = do
   GHC.IO.Encoding.setLocaleEncoding System.IO.utf8
@@ -53,6 +63,7 @@ main = do
     testTree =
       Tasty.testGroup "Laps Tests"
         [ deserializationTests
+        , stringProcessing
         ]
 
   Tasty.defaultMain testTree

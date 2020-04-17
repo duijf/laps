@@ -12,11 +12,13 @@ haskellPackages:
       dhall
       filepath
       pretty-simple
+      quickcheck-instances
       recursion-schemes
       string-conversions
       stm-conduit
       tasty
       tasty-golden
+      tasty-quickcheck
       text
       typed-process
       unix
