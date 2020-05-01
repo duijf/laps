@@ -2,10 +2,6 @@ let Prelude = https://prelude.dhall-lang.org/v15.0.0/package.dhall
 
 let Laps = ./package.dhall
 
-let nixEnv
-    : Optional Laps.NixEnv
-    = Some { srcFile = "default.nix", attr = None Text, clearEnv = False }
-
 in  [ Laps.simpleScript
         { name = "build"
         , shortDesc = "Build the Haskell code"
