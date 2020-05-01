@@ -172,6 +172,7 @@ let simpleProgram =
               , shortDesc : Text
               , program : Text
               , arguments : List Text
+              , envVars : List EnvVar
               }
             )
       ->  { name = argRec.name
@@ -184,7 +185,7 @@ let simpleProgram =
                       { program = argRec.program, arguments = argRec.arguments }
                 , nixEnv = None NixEnv
                 , watchExtensions = [] : List Text
-                , envVars = [] : List EnvVar
+                , envVars = argRec.envVars
                 }
           }
 
@@ -194,6 +195,7 @@ let simpleScript =
               , shortDesc : Text
               , interpreter : Text
               , contents : Text
+              , envVars : List EnvVar
               }
             )
       ->  { name = argRec.name
@@ -208,7 +210,7 @@ let simpleScript =
                       }
                 , nixEnv = None NixEnv
                 , watchExtensions = [] : List Text
-                , envVars = [] : List EnvVar
+                , envVars = argRec.envVars
                 }
           }
 
