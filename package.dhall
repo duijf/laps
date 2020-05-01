@@ -33,12 +33,17 @@ let Executable
       | Script : { interpreter : Text, contents : Text }
       >
 
+let EnvVar
+    : Type
+    = { var : Text, value : Text }
+
 let Unit
     : Type
     = { executable : Executable
       , alias : Text
       , nixEnv : Optional NixEnv
       , watchExtensions : List Text
+      , envVars : List EnvVar
       }
 
 let -- We want users to be able to specify a tree of commands to execute.
@@ -160,6 +165,7 @@ let simpleProgram =
                       { program = argRec.program, arguments = argRec.arguments }
                 , nixEnv = None NixEnv
                 , watchExtensions = [] : List Text
+                , envVars = [] : List EnvVar
                 }
           }
 
@@ -183,8 +189,11 @@ let simpleScript =
                       }
                 , nixEnv = None NixEnv
                 , watchExtensions = [] : List Text
+                , envVars = [] : List EnvVar
                 }
           }
+
+let envVar = \(var : Text) -> \(value : Text) -> { var = var, value = value }
 
 in  { Command = Command
     , NixEnv = NixEnv
@@ -199,4 +208,6 @@ in  { Command = Command
     , tree = tree
     , simpleProgram = simpleProgram
     , simpleScript = simpleScript
+    , EnvVar = EnvVar
+    , envVar = envVar
     }
