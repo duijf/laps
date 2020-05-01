@@ -1,3 +1,5 @@
+let Prelude = https://prelude.dhall-lang.org/v15.0.0/package.dhall
+
 let -- Taken from the Prelude because of build problems.
     --
     -- In a Nix sandbox, we do not have network access. That means that our
@@ -209,6 +211,51 @@ let simpleScript =
                 , envVars = [] : List EnvVar
                 }
           }
+
+let
+    -- This doesn't work because Dhall can't generally recurse over
+    -- functions. That's annoying (but by design) so I'll have to
+    -- see if I can use something else. People are actually using
+    -- recursion schemes in Dhall, so it might be possible.
+
+    -- mapAllUnits
+    -- : (Unit -> Unit) -> StartOrder -> StartOrder
+    -- =     \(f : Unit -> Unit)
+    --   ->  \(startOrder : StartOrder)
+    --   ->  startOrder
+    --         StartOrder
+    --         { single = \(u : Unit) -> single (f u)
+    --         , parallel =
+    --                 \(us : List StartOrder)
+    --             ->  parallel
+    --                   ( Prelude.List.map
+    --                       StartOrder
+    --                       StartOrder
+    --                       (mapAllUnits f)
+    --                       us
+    --                   )
+    --         , serial =
+    --                 \(us : List StartOrder)
+    --             ->  serial
+    --                   ( Prelude.List.map
+    --                       StartOrder
+    --                       StartOrder
+    --                       (mapAllUnits f)
+    --                       us
+    --                   )
+    --         , tree =
+    --                 \(u : Unit)
+    --             ->      (us : List StartOrder)
+    --                 ->  tree
+    --                       (f u)
+    --                       ( Prelude.List.map
+    --                           StartOrder
+    --                           StartOrder
+    --                           (mapAllUnits f)
+    --                           us
+    --                       )
+    --         }
+    foo = 1
 
 in  { Command = Command
     , NixEnv = NixEnv
