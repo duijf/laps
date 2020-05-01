@@ -33,9 +33,26 @@ let Executable
       | Script : { interpreter : Text, contents : Text }
       >
 
+let Value
+    : Type
+    = < Plain : Text | NixDirectory : { pkgName : Text, path : Text } >
+
 let EnvVar
     : Type
-    = { var : Text, value : Text }
+    = { name : Text, value : Value }
+
+let plainVar =
+          \(name : Text)
+      ->  \(value : Text)
+      ->  { name = name, value = Value.Plain value }
+
+let nixDirectory =
+          \(name : Text)
+      ->  \(pkgName : Text)
+      ->  \(path : Text)
+      ->  { name = name
+          , value = Value.NixDirectory { pkgName = pkgName, path = path }
+          }
 
 let Unit
     : Type
@@ -193,8 +210,6 @@ let simpleScript =
                 }
           }
 
-let envVar = \(var : Text) -> \(value : Text) -> { var = var, value = value }
-
 in  { Command = Command
     , NixEnv = NixEnv
     , Executable = Executable
@@ -209,5 +224,6 @@ in  { Command = Command
     , simpleProgram = simpleProgram
     , simpleScript = simpleScript
     , EnvVar = EnvVar
-    , envVar = envVar
+    , plainVar = plainVar
+    , nixDirectory = nixDirectory
     }
