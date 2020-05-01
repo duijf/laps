@@ -142,6 +142,50 @@ let tree
                 nested
             )
 
+let simpleProgram =
+          \ ( argRec
+            : { name : Text
+              , shortDesc : Text
+              , program : Text
+              , arguments : List Text
+              }
+            )
+      ->  { name = argRec.name
+          , shortDesc = argRec.shortDesc
+          , startOrder =
+              single
+                { alias = argRec.program
+                , executable =
+                    Executable.Program
+                      { program = argRec.program, arguments = argRec.arguments }
+                , nixEnv = None NixEnv
+                , watchExtensions = [] : List Text
+                }
+          }
+
+let simpleScript =
+          \ ( argRec
+            : { name : Text
+              , shortDesc : Text
+              , interpreter : Text
+              , contents : Text
+              }
+            )
+      ->  { name = argRec.name
+          , shortDesc = argRec.shortDesc
+          , startOrder =
+              single
+                { alias = argRec.name
+                , executable =
+                    Executable.Script
+                      { interpreter = argRec.interpreter
+                      , contents = argRec.contents
+                      }
+                , nixEnv = None NixEnv
+                , watchExtensions = [] : List Text
+                }
+          }
+
 in  { Command = Command
     , NixEnv = NixEnv
     , Executable = Executable
@@ -153,4 +197,6 @@ in  { Command = Command
     , serial = serial
     , parallel = parallel
     , tree = tree
+    , simpleProgram = simpleProgram
+    , simpleScript = simpleScript
     }
