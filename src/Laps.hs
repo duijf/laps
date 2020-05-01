@@ -1,4 +1,8 @@
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE ViewPatterns #-}
+
 module Laps where
 
 import qualified Control.Concurrent.Async as Async
@@ -7,9 +11,16 @@ import           Control.Monad (void, when)
 import           Control.Monad.IO.Class (MonadIO, liftIO)
 import           Control.Monad.Trans.Resource (MonadResource)
 import qualified Control.Monad.Trans.Resource as Resource
+import           Data.ByteString.Char8 (ByteString)
+import qualified Data.ByteString.Char8 as ByteString
+import qualified Data.ByteString.Lazy.Internal as LazyByteString
+import           Data.Conduit ((.|))
+import qualified Data.Conduit as Conduit
+import qualified Data.Conduit.Combinators as Conduit
 import qualified Data.Foldable as Foldable
 import           Data.Function ((&))
 import qualified Data.List as List
+import           Data.Semigroup (Max (..))
 import           Data.String.Conversions (cs)
 import           Data.Text (Text)
 import qualified Data.Text as Text
@@ -21,13 +32,16 @@ import qualified Dhall
 import qualified Dhall.Core as Core
 import qualified Dhall.Src as Core
 import qualified Dhall.TH as Dhall
+import           GHC.IO.Exception (IOErrorType (..))
 import qualified System.Console.ANSI as ANSI
 import qualified System.Exit as Exit
 import qualified System.IO as IO
+import qualified System.IO.Error as IO
+import qualified System.Posix as Posix
 import qualified System.Posix.Env.ByteString as Env
 import qualified System.Posix.Files as Files
 import qualified System.Posix.Temp as Temp
-import qualified System.Process.Typed as Process
+import qualified System.Process as Process
 
 import           OrphanInstances ()
 
@@ -84,10 +98,10 @@ instance FromDhall NixEnv where
 
 data Unit
   = Unit
-    { executable :: Executable
-    , alias :: Text
-    , nixEnv :: Maybe NixEnv
-    , watchExtensions :: [Text]
+    { uExecutable :: Executable
+    , uAlias :: Text
+    , uNixEnv :: Maybe NixEnv
+    , uWatchExtensions :: [Text]
     } deriving (Show)
 
 instance FromDhall Unit where
@@ -98,6 +112,17 @@ instance FromDhall Unit where
       <*> Dhall.field "alias" Dhall.strictText
       <*> Dhall.field "nixEnv" (Dhall.maybe (Dhall.autoWith opts))
       <*> Dhall.field "watchExtensions" (Dhall.list Dhall.strictText)
+
+
+-- Internal representation of a Unit. Contains fields not present in the
+-- Dhall representation (e.g. calculated values).
+data UnitInternal
+  = UnitInternal
+    { uiExecutable :: Executable
+    , uiAliasPretty :: ByteString
+    , uiNixEnv :: Maybe NixEnv
+    , uiWatchExtensions :: [Text]
+    } deriving (Show)
 
 
 -- We have the type parameter @a@, because we want to derive the useful
@@ -227,11 +252,11 @@ main = do
     Exit.exitFailure)
 
   List.find (\c -> name c == head args) commands & \case
-    Just command ->
+    Just command -> do
       -- Does not do what we want yet: we don't have a way to
       -- stop the computation in case a single process returns
       -- errors.
-      void $ forStartOrder runUnit (startOrder command)
+      void $ forStartOrder runUnit (convert $ startOrder command)
     Nothing -> do
       printColor ANSI.Red "error:"
       Text.putStr " No command "
@@ -241,6 +266,40 @@ main = do
       Text.putStr " Available commands are: "
       Foldable.fold $ List.intersperse (Text.putStr ", ") $ printBold <$> name <$> commands
       Text.putStr "\n"
+
+
+-- Convert units in a startorder to their internal representaition.
+convert :: StartOrder Unit -> StartOrder UnitInternal
+convert startOrder =
+  let
+    maxAliasLength = foldMap (Max . Text.length . uAlias) startOrder
+    colors = [ANSI.Yellow, ANSI.Blue, ANSI.Magenta, ANSI.Cyan, ANSI.Red, ANSI.Green]
+
+    convertUnit :: Unit -> Int -> UnitInternal
+    convertUnit Unit{..} i =
+      UnitInternal
+        { uiExecutable = uExecutable
+        , uiAliasPretty = prettifyAlias maxAliasLength (colors !! (i `mod` (length colors))) uAlias
+        , uiNixEnv = uNixEnv
+        , uiWatchExtensions = uWatchExtensions
+        }
+  in fmap (uncurry convertUnit) (withIndex startOrder)
+
+
+-- Turn a traversable into a traversable storing an index. The index is dependent
+-- on the traversal order.
+withIndex :: Traversable t => t a -> t (a, Int)
+withIndex = snd . (Traversable.mapAccumL (\i e -> (i+1, (e, i))) 0)
+
+
+prettifyAlias :: Max Int -> ANSI.Color -> Text -> ByteString
+prettifyAlias maxAliasLength color alias =
+  let
+    cyan = cs $ ANSI.setSGRCode [ANSI.Reset, ANSI.SetColor ANSI.Foreground ANSI.Vivid color]
+    padded = cs $ (Text.replicate ((getMax maxAliasLength) - (Text.length alias)) " ") <> alias
+    reset = cs $ ANSI.setSGRCode [ANSI.Reset]
+  in
+    cyan <> padded <> reset <> " | "
 
 
 printColor :: ANSI.Color -> Text -> IO ()
@@ -280,9 +339,9 @@ printCommand command = do
   Text.putStrLn (shortDesc command)
 
 
-getProcessConfig :: (MonadIO m, MonadResource m) => Unit -> m (Process.ProcessConfig () () ())
+getProcessConfig :: (MonadIO m, MonadResource m) => UnitInternal -> m (Process.CreateProcess, IO.Handle)
 getProcessConfig unit = do
-  (prog, args) <- case executable unit of
+  (prog, args) <- case uiExecutable unit of
     (S Script{interpreter, contents}) -> do
       path <- writeScript interpreter contents
       pure (path, [])
@@ -290,14 +349,25 @@ getProcessConfig unit = do
     (P Program{program, arguments}) -> pure (cs $ program, cs $ arguments)
 
   let
-    watchExec = case watchExtensions unit of
+    watchExec = case uiWatchExtensions unit of
       [] -> []
       exts -> ["watchexec", "--exts", Foldable.fold $ List.intersperse "," $ cs $ exts, "--"]
 
+  (termPrimFd, termSecFd) <- liftIO $ Posix.openPseudoTerminal
+
+  hRead <- liftIO $ Posix.fdToHandle termPrimFd
+  hWrite <- liftIO $ Posix.fdToHandle termSecFd
+
+  _ <- Resource.register $ IO.hClose hRead
+  _ <- Resource.register $ IO.hClose hWrite
+
+  let outputStream = Process.UseHandle hWrite
+      setOutputStream cp = cp { Process.std_out = outputStream, Process.std_err = outputStream }
+
   pure $
-    case nixEnv unit of
-      Just (env) -> Process.proc "nix" (["run", "-f", cs $ srcFile env, "-c"] ++ watchExec ++ [prog] ++ args)
-      Nothing -> Process.proc prog args
+    case uiNixEnv unit of
+      Just (env) -> (setOutputStream $ Process.proc "nix" (["run", "-f", cs $ srcFile env, "-c"] ++ watchExec ++ [prog] ++ args), hRead)
+      Nothing -> (setOutputStream $ Process.proc prog args, hRead)
 
 
 writeScript :: (MonadIO m, MonadResource m) => Text -> Text -> m FilePath
@@ -337,10 +407,61 @@ forStartOrder f startOrder = case startOrder of
     pure $ Tree a' as'
 
 
-runUnit :: Unit -> IO ()
+runUnit :: UnitInternal -> IO ()
 runUnit unit = Resource.runResourceT $ do
-  proc <- getProcessConfig unit
+  (createProc, readHandle) <- getProcessConfig unit
+  liftIO $ Process.withCreateProcess createProc $ \_stdin _stdout _stderr _proc -> do
+    Conduit.runConduit $
+      sourceHandleCatchIoErr readHandle
+        .| Conduit.linesUnboundedAscii
+        -- Strip the clear line ANSI code. Otherwise programs like Nix run mess up
+        -- the output.
+        .| Conduit.map renderClearLines
+        .| Conduit.map (uiAliasPretty unit <>)
+        .| Conduit.mapM_ ByteString.putStrLn
 
-  -- Discard ExitCodeException for now. We need to find a way
-  -- to propagate this nicely.
-  liftIO $ void $ Exception.try @Process.ExitCodeException $ Process.runProcess_ proc
+    pure ()
+
+
+infixr 5 :<
+pattern (:<) :: Char -> ByteString -> ByteString
+pattern b :< bs <- (ByteString.uncons -> Just (b, bs))
+
+
+renderClearLines :: ByteString -> ByteString
+renderClearLines s = case ByteString.breakSubstring ansiClear s of
+  (sHead, "") -> sHead
+  (_, '\x1b' :< '[' :< 'K' :< sTail) -> renderClearLines sTail
+  _ -> error "renderClearLines: Pattern match error on ANSI escape code"
+
+
+ansiClear :: ByteString
+ansiClear = "\x1b[K"
+
+
+-- @Conduit.sourceHandle@ which catches @GHC.IO.Exception.IOErrorType.HardwareFault@s.
+-- These correspond to @errno 5@ on Linux which is returned when you attempt to read from
+-- a pseudo terminal which has been closed because the child process has exited (but I
+-- might be doing something very wrong here).
+sourceHandleCatchIoErr :: MonadIO m => IO.Handle -> Conduit.ConduitT i ByteString m ()
+sourceHandleCatchIoErr h = loop
+  where
+    loop = do
+      result <- liftIO $ Exception.tryJust catchHardwareFaults (ByteString.hGetSome h LazyByteString.defaultChunkSize)
+      case result of
+        Right bs | ByteString.null bs -> pure ()
+        Right bs | otherwise -> Conduit.yield bs >> loop
+        Left _ -> pure ()
+
+
+catchHardwareFaults :: IOError -> Maybe IOError
+catchHardwareFaults ioe =
+  if isHardwareFault $ IO.ioeGetErrorType ioe
+  then Just ioe
+  else Nothing
+
+
+isHardwareFault :: IOErrorType -> Bool
+isHardwareFault = \case
+  HardwareFault -> True
+  _ -> False

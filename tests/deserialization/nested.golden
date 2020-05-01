@@ -3,7 +3,7 @@
     , shortDesc = "foo"
     , startOrder = Tree
         ( Unit
-            { executable = P
+            { uExecutable = P
                 ( Program
                     { program = "foo"
                     , arguments =
@@ -12,14 +12,14 @@
                         ]
                     }
                 )
-            , alias = "foo"
-            , nixEnv = Nothing
-            , watchExtensions = []
+            , uAlias = "foo"
+            , uNixEnv = Nothing
+            , uWatchExtensions = []
             }
         )
         [ Single
             ( Unit
-                { executable = P
+                { uExecutable = P
                     ( Program
                         { program = "foo"
                         , arguments =
@@ -28,15 +28,15 @@
                             ]
                         }
                     )
-                , alias = "bar"
-                , nixEnv = Nothing
-                , watchExtensions = []
+                , uAlias = "bar"
+                , uNixEnv = Nothing
+                , uWatchExtensions = []
                 }
             )
         , Parallel
             [ Single
                 ( Unit
-                    { executable = P
+                    { uExecutable = P
                         ( Program
                             { program = "foo"
                             , arguments =
@@ -45,14 +45,14 @@
                                 ]
                             }
                         )
-                    , alias = "baz"
-                    , nixEnv = Nothing
-                    , watchExtensions = []
+                    , uAlias = "baz"
+                    , uNixEnv = Nothing
+                    , uWatchExtensions = []
                     }
                 )
             , Single
                 ( Unit
-                    { executable = P
+                    { uExecutable = P
                         ( Program
                             { program = "foo"
                             , arguments =
@@ -61,16 +61,16 @@
                                 ]
                             }
                         )
-                    , alias = "quix"
-                    , nixEnv = Nothing
-                    , watchExtensions = []
+                    , uAlias = "quix"
+                    , uNixEnv = Nothing
+                    , uWatchExtensions = []
                     }
                 )
             ]
         , Serial
             [ Single
                 ( Unit
-                    { executable = P
+                    { uExecutable = P
                         ( Program
                             { program = "foo"
                             , arguments =
@@ -79,14 +79,14 @@
                                 ]
                             }
                         )
-                    , alias = "1"
-                    , nixEnv = Nothing
-                    , watchExtensions = []
+                    , uAlias = "1"
+                    , uNixEnv = Nothing
+                    , uWatchExtensions = []
                     }
                 )
             , Single
                 ( Unit
-                    { executable = P
+                    { uExecutable = P
                         ( Program
                             { program = "foo"
                             , arguments =
@@ -95,14 +95,14 @@
                                 ]
                             }
                         )
-                    , alias = "2"
-                    , nixEnv = Nothing
-                    , watchExtensions = []
+                    , uAlias = "2"
+                    , uNixEnv = Nothing
+                    , uWatchExtensions = []
                     }
                 )
             , Tree
                 ( Unit
-                    { executable = P
+                    { uExecutable = P
                         ( Program
                             { program = "foo"
                             , arguments =
@@ -111,14 +111,14 @@
                                 ]
                             }
                         )
-                    , alias = "3"
-                    , nixEnv = Nothing
-                    , watchExtensions = []
+                    , uAlias = "3"
+                    , uNixEnv = Nothing
+                    , uWatchExtensions = []
                     }
                 )
                 [ Single
                     ( Unit
-                        { executable = P
+                        { uExecutable = P
                             ( Program
                                 { program = "foo"
                                 , arguments =
@@ -127,9 +127,9 @@
                                     ]
                                 }
                             )
-                        , alias = "4"
-                        , nixEnv = Nothing
-                        , watchExtensions = []
+                        , uAlias = "4"
+                        , uNixEnv = Nothing
+                        , uWatchExtensions = []
                         }
                     )
                 ]
