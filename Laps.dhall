@@ -11,6 +11,7 @@ in  [ Laps.simpleScript
             cabal configure --extra-lib-dirs=$(nix-build release.nix -A libsys)/lib
             cabal new-build
             ''
+        , envVars = [] : List Laps.EnvVar
         }
     , Laps.simpleScript
         { name = "build-release"
@@ -21,24 +22,28 @@ in  [ Laps.simpleScript
             cabal configure --extra-lib-dirs=$(nix-build release.nix -A libsys)/lib
             cabal new-build -frelease
             ''
+        , envVars = [] : List Laps.EnvVar
         }
     , Laps.simpleProgram
         { name = "test"
         , shortDesc = "Haskell tests"
         , program = "cabal"
         , arguments = [ "test" ]
+        , envVars = [] : List Laps.EnvVar
         }
     , Laps.simpleProgram
         { name = "test-accept"
         , shortDesc = "Haskell tests + accept changes to golden tests"
         , program = "cabal"
         , arguments = [ "test", "--test-option=--accept" ]
+        , envVars = [] : List Laps.EnvVar
         }
     , Laps.simpleProgram
         { name = "typecheck"
         , shortDesc = "Typecheck the Dhall code"
         , program = "dhall"
         , arguments = [ "--ascii", "--file", "package.dhall" ]
+        , envVars = [] : List Laps.EnvVar
         }
     , Laps.simpleScript
         { name = "format"
@@ -49,5 +54,6 @@ in  [ Laps.simpleScript
             fd -e dhall --exec dhall --ascii format --inplace {}
             fd -e hs --exec stylish-haskell --inplace {}
             ''
+        , envVars = [] : List Laps.EnvVar
         }
     ]
