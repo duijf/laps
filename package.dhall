@@ -78,6 +78,9 @@ let -- We want users to be able to specify a tree of commands to execute.
     --
     -- Gabriel has a nice blogpost explaining how this works in a Dhall's
     -- precursors: http://www.haskellforall.com/2016/04/data-is-code.html
+    --
+    -- The Dhall wiki also has a cookbook style tutorial about this:
+    -- https://github.com/dhall-lang/dhall-lang/wiki/How-to-translate-recursive-code-to-Dhall
     StartOrder
     : Type
     =     forall (StartOrder : Type)
