@@ -222,45 +222,51 @@ let
     -- functions. That's annoying (but by design) so I'll have to
     -- see if I can use something else. People are actually using
     -- recursion schemes in Dhall, so it might be possible.
+    --
+    -- I still don't fully understand how this fits together with
+    -- the information from the Dhall wiki. The wiki code discusses
+    -- recursive datastructures, but doesn't discuss transforming
+    -- them. Last time I was here, I felt like I was close to
+    -- understanding, but it seems like this has again faded. Let's
+    -- see how far we get this time.
 
-    -- mapAllUnits
-    -- : (Unit -> Unit) -> StartOrder -> StartOrder
-    -- =     \(f : Unit -> Unit)
-    --   ->  \(startOrder : StartOrder)
-    --   ->  startOrder
-    --         StartOrder
-    --         { single = \(u : Unit) -> single (f u)
-    --         , parallel =
-    --                 \(us : List StartOrder)
-    --             ->  parallel
-    --                   ( Prelude.List.map
-    --                       StartOrder
-    --                       StartOrder
-    --                       (mapAllUnits f)
-    --                       us
-    --                   )
-    --         , serial =
-    --                 \(us : List StartOrder)
-    --             ->  serial
-    --                   ( Prelude.List.map
-    --                       StartOrder
-    --                       StartOrder
-    --                       (mapAllUnits f)
-    --                       us
-    --                   )
-    --         , tree =
-    --                 \(u : Unit)
-    --             ->      (us : List StartOrder)
-    --                 ->  tree
-    --                       (f u)
-    --                       ( Prelude.List.map
-    --                           StartOrder
-    --                           StartOrder
-    --                           (mapAllUnits f)
-    --                           us
-    --                       )
-    --         }
-    foo = 1
+    mapAllUnits
+    : (Unit -> Unit) -> StartOrder -> StartOrder
+    =     \(f : Unit -> Unit)
+      ->  \(startOrder : StartOrder)
+      ->  startOrder
+            StartOrder
+            { single = \(u : Unit) -> single (f u)
+            , parallel =
+                    \(us : List StartOrder)
+                ->  parallel
+                      ( Prelude.List.map
+                          StartOrder
+                          StartOrder
+                          (mapAllUnits f)
+                          us
+                      )
+            , serial =
+                    \(us : List StartOrder)
+                ->  serial
+                      ( Prelude.List.map
+                          StartOrder
+                          StartOrder
+                          (mapAllUnits f)
+                          us
+                      )
+            , tree =
+                    \(u : Unit)
+                ->      (us : List StartOrder)
+                    ->  tree
+                          (f u)
+                          ( Prelude.List.map
+                              StartOrder
+                              StartOrder
+                              (mapAllUnits f)
+                              us
+                          )
+            }
 
 in  { Command = Command
     , NixEnv = NixEnv
